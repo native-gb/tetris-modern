@@ -276,7 +276,7 @@ void test_rocket_thresholds_and_game_over_wipes() {
                flow.ending_stage() == EndingStage::rocket_initialize,
            "bonus delay enters the rocket initializer");
     tick(flow, 520);
-    expect(flow.ending_stage() == EndingStage::rocket_rising && flow.exhaust_x() == 0x54,
+    expect(flow.ending_stage() == EndingStage::rocket_rising && flow.exhaust_x() == 84,
            "rocket reaches its rising exhaust sequence");
     int guard = 0;
     while (flow.screen() != Screen::name_entry && guard < 2'000) {
@@ -320,7 +320,7 @@ void test_type_b_endings_and_scoreboard() {
     tick(buran, 705);
     expect(buran.screen() == Screen::buran, "height five continues to Buran");
     tick(buran, 763);
-    expect(buran.ending_stage() == EndingStage::buran_rising && buran.exhaust_x() == 0x4C,
+    expect(buran.ending_stage() == EndingStage::buran_rising && buran.exhaust_x() == 76,
            "Buran reaches its rising exhaust sequence");
     expect(buran.exhaust_animation_frame() == 0,
            "Buran exhaust begins on its first frame");

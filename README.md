@@ -45,6 +45,7 @@ Other useful commands:
 ./scripts/test.sh dev
 ./scripts/test.sh release
 ./scripts/test.sh asan
+./scripts/check-clean-checkout.sh
 ```
 
 F5 in VS Code builds and launches the same executable in a centered, resizable
@@ -118,6 +119,10 @@ The code follows the repository `AGENTS.md` C+- style: direct state, plain
 functions, concrete names, modest abstraction, and no Game Boy-shaped gameplay
 ownership. `PLAN.md` records the architecture and completion standard;
 `TASKS.md` records verification evidence.
+
+Only actual cartridge data is decoded into catalogs. Rules encoded by original
+instructions—score bases, thresholds, menu limits, and progression formulas—are
+written as named game rules instead of being disguised as synthetic ROM tables.
 
 ## Intentional differences
 

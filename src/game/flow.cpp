@@ -11,6 +11,8 @@ namespace tetris {
 namespace {
 
 constexpr int title_interval_frames = 125;
+constexpr int rocket_exhaust_x = 84;
+constexpr int buran_exhaust_x = 76;
 
 bool confirm(const Buttons& pressed) {
     return pressed.rotate_right || pressed.start;
@@ -469,7 +471,9 @@ bool GameFlow::launch_smoke_visible() const {
         ending_stage_ == EndingStage::buran_liftoff;
     return ignition && ((ending_elapsed_ / 10) & 1) == 0;
 }
-int GameFlow::exhaust_x() const { return screen_ == Screen::buran ? 0x4C : 0x54; }
+int GameFlow::exhaust_x() const {
+    return screen_ == Screen::buran ? buran_exhaust_x : rocket_exhaust_x;
+}
 int GameFlow::exhaust_animation_frame() const {
     if (ending_stage_ == EndingStage::rocket_rising)
         return ((ending_elapsed_ + 3) / 6) & 1;

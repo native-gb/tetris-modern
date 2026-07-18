@@ -1,6 +1,19 @@
 #include "game/randomizer.hpp"
 
 namespace tetris {
+namespace {
+
+bool original_history_rejects(PieceKind preview, PieceKind hidden,
+                              PieceKind candidate) {
+    // This intentionally preserves the original generator's unusual bitwise
+    // history rule; equality with the preview means the candidate is rerolled.
+    const auto merged = static_cast<unsigned int>(preview) |
+                        static_cast<unsigned int>(hidden) |
+                        static_cast<unsigned int>(candidate);
+    return merged == static_cast<unsigned int>(preview);
+}
+
+} // namespace
 
 PieceKind piece_from_divider(std::uint8_t divider) {
     // The hardware counter decrements before the addition loop. Zero therefore
@@ -17,10 +30,8 @@ PieceQueue advance_piece_queue(PieceSpec preview, PieceSpec hidden,
     for (const std::uint8_t sample : samples) {
         candidate = {.kind = piece_from_divider(sample)};
         ++attempts;
-        const auto history = static_cast<unsigned int>(preview.kind) |
-                             static_cast<unsigned int>(hidden.kind) |
-                             static_cast<unsigned int>(candidate.kind);
-        if (attempts == 3 || history != static_cast<unsigned int>(preview.kind))
+        if (attempts == 3 ||
+            !original_history_rejects(preview.kind, hidden.kind, candidate.kind))
             break;
     }
 

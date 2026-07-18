@@ -22,6 +22,14 @@ constexpr int movement_frames = 10;
 constexpr int congratulations_character_frames = 6;
 constexpr int congratulations_wait_frames = 255;
 constexpr std::array<int, 6> dancer_frames = {241, 241, 241, 241, 385, 769};
+constexpr int rocket_start_y = 111;
+constexpr int rocket_liftoff_y = 106;
+constexpr int rocket_exhaust_y = 122;
+constexpr int rocket_exit_y = -32;
+constexpr int buran_start_y = 95;
+constexpr int buran_liftoff_y = 88;
+constexpr int buran_exhaust_y = 120;
+constexpr int buran_exit_y = -48;
 
 std::uint32_t& line_count(LineCounts& counts, int category) {
     if (category == 0)
@@ -93,7 +101,7 @@ void GameFlow::tick_ending(const Buttons& pressed) {
     case EndingStage::rocket_bonus_delay:
         screen_ = Screen::rocket;
         ending_stage_ = EndingStage::rocket_initialize;
-        launch_y_ = 0x6F;
+        launch_y_ = rocket_start_y;
         exhaust_y_ = 0;
         timer_ = initialize_frames;
         ending_elapsed_ = 0;
@@ -118,19 +126,19 @@ void GameFlow::tick_ending(const Buttons& pressed) {
         ending_elapsed_ = 0;
         [[fallthrough]];
     case EndingStage::rocket_liftoff:
-        launch_y_ = (launch_y_ - 1) & 0xFF;
+        --launch_y_;
         timer_ = movement_frames;
-        if (launch_y_ == 0x6A) {
-            exhaust_y_ = launch_y_ + 0x10;
+        if (launch_y_ == rocket_liftoff_y) {
+            exhaust_y_ = rocket_exhaust_y;
             ending_stage_ = EndingStage::rocket_rising;
             ending_elapsed_ = 0;
         }
         break;
     case EndingStage::rocket_rising:
-        launch_y_ = (launch_y_ - 1) & 0xFF;
-        exhaust_y_ = (exhaust_y_ - 1) & 0xFF;
+        --launch_y_;
+        --exhaust_y_;
         timer_ = movement_frames;
-        if (launch_y_ == 0xE0) {
+        if (launch_y_ == rocket_exit_y) {
             ending_stage_ = EndingStage::rocket_return;
             timer_ = 5;
             ending_elapsed_ = 0;
@@ -157,7 +165,7 @@ void GameFlow::tick_ending(const Buttons& pressed) {
         } else {
             screen_ = Screen::buran;
             ending_stage_ = EndingStage::buran_initialize;
-            launch_y_ = 0x5F;
+            launch_y_ = buran_start_y;
             exhaust_y_ = 0;
             timer_ = initialize_frames;
             ending_elapsed_ = 0;
@@ -183,19 +191,19 @@ void GameFlow::tick_ending(const Buttons& pressed) {
         ending_elapsed_ = 0;
         break;
     case EndingStage::buran_liftoff:
-        launch_y_ = (launch_y_ - 1) & 0xFF;
+        --launch_y_;
         timer_ = movement_frames;
-        if (launch_y_ == 0x58) {
-            exhaust_y_ = launch_y_ + 0x20;
+        if (launch_y_ == buran_liftoff_y) {
+            exhaust_y_ = buran_exhaust_y;
             ending_stage_ = EndingStage::buran_rising;
             ending_elapsed_ = 0;
         }
         break;
     case EndingStage::buran_rising:
-        launch_y_ = (launch_y_ - 1) & 0xFF;
-        exhaust_y_ = (exhaust_y_ - 1) & 0xFF;
+        --launch_y_;
+        --exhaust_y_;
         timer_ = movement_frames;
-        if (launch_y_ == 0xD0) {
+        if (launch_y_ == buran_exit_y) {
             ending_stage_ = EndingStage::congratulations;
             congratulations_characters_ = 0;
             ending_elapsed_ = 0;

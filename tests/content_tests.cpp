@@ -19,6 +19,7 @@ void expect(bool condition, const std::string& message) {
     ++failures;
 }
 
+#ifdef TETRIS_TEST_ROM
 void expect_provenance(const tetris::content::Provenance& source,
                        const tetris::content::Rom& rom) {
     expect(!source.id.empty(), "provenance has a semantic id");
@@ -85,6 +86,7 @@ void expect_demo_round_trip(const tetris::content::Demo& demo,
                           static_cast<std::ptrdiff_t>(span.begin)),
            demo.source.id + " round-trips to the source bytes");
 }
+#endif
 
 void test_sha1() {
     constexpr std::array<std::uint8_t, 3> abc = {'a', 'b', 'c'};

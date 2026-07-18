@@ -1,0 +1,81 @@
+#include "content/rom.hpp"
+
+#include "content/sha1.hpp"
+
+#include <fstream>
+
+namespace tetris::content {
+namespace {
+
+std::uint8_t header_checksum(std::span<const std::uint8_t> bytes) {
+    std::uint8_t result = 0;
+    for (std::size_t offset = 0x134; offset < 0x14D; ++offset)
+        result = static_cast<std::uint8_t>(result - bytes[offset] - 1U);
+    return result;
+}
+
+std::uint16_t global_checksum(std::span<const std::uint8_t> bytes) {
+    std::uint32_t result = 0;
+    for (std::size_t offset = 0; offset < bytes.size(); ++offset) {
+        if (offset != 0x14E && offset != 0x14F)
+            result += bytes[offset];
+    }
+    return static_cast<std::uint16_t>(result & 0xFFFFU);
+}
+
+std::string read_title(std::span<const std::uint8_t> bytes) {
+    std::string title;
+    for (std::size_t offset = 0x134; offset <= 0x143; ++offset) {
+        const std::uint8_t value = bytes[offset];
+        if (value < 0x20 || value > 0x7E)
+            break;
+        title.push_back(static_cast<char>(value));
+    }
+    return title;
+}
+
+} // namespace
+
+std::span<const std::uint8_t> Rom::range(std::size_t begin, std::size_t end) const {
+    if (begin > end || end > bytes.size())
+        return {};
+    return std::span<const std::uint8_t>(bytes).subspan(begin, end - begin);
+}
+
+bool load_rom(const std::filesystem::path& path, Rom& result, std::string& error) {
+    std::ifstream file(path, std::ios::binary | std::ios::ate);
+    if (!file) {
+        error = "could not open ROM: " + path.string();
+        return false;
+    }
+    const std::streamoff size = file.tellg();
+    if (size < 0x150 || size > 16 * 1024 * 1024) {
+        error = "file is not a supported Game Boy ROM size";
+        return false;
+    }
+
+    Rom loaded;
+    loaded.path = path;
+    loaded.bytes.resize(static_cast<std::size_t>(size));
+    file.seekg(0, std::ios::beg);
+    file.read(reinterpret_cast<char*>(loaded.bytes.data()), size);
+    if (!file) {
+        error = "could not read ROM: " + path.string();
+        return false;
+    }
+    loaded.digest = sha1(loaded.bytes);
+    loaded.title = read_title(loaded.bytes);
+    loaded.revision = loaded.bytes[0x14C];
+    loaded.header_checksum_valid = loaded.bytes[0x14D] == header_checksum(loaded.bytes);
+    const std::uint16_t stored = static_cast<std::uint16_t>(
+        (static_cast<std::uint16_t>(loaded.bytes[0x14E]) << 8U) | loaded.bytes[0x14F]);
+    loaded.global_checksum_valid = stored == global_checksum(loaded.bytes);
+    result = std::move(loaded);
+    return true;
+}
+
+bool is_supported(const Rom& rom) {
+    return rom.bytes.size() == supported_size && rom.digest == supported_sha1;
+}
+
+} // namespace tetris::content

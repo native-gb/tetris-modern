@@ -181,7 +181,7 @@ void GameFlow::tick_ending(const Buttons& pressed) {
     case EndingStage::buran_final_ignition:
         ending_stage_ = EndingStage::buran_liftoff;
         ending_elapsed_ = 0;
-        [[fallthrough]];
+        break;
     case EndingStage::buran_liftoff:
         launch_y_ = (launch_y_ - 1) & 0xFF;
         timer_ = movement_frames;
@@ -244,7 +244,6 @@ void GameFlow::tick_ending(const Buttons& pressed) {
             scoreboard_.score = std::min<std::uint32_t>(999'999, scoreboard_.score + 1);
             timer_ = 1;
         } else {
-            scoreboard_.score = game_.score();
             ending_stage_ = EndingStage::scoreboard_wait;
             ending_elapsed_ = 0;
         }

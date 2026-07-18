@@ -137,6 +137,16 @@ if(BUILD_TESTING)
     tetris_target_defaults(tetris-game-tests)
     add_test(NAME tetris_game COMMAND tetris-game-tests)
 
+    add_executable(tetris-simulation-tests tests/simulation_tests.cpp)
+    target_link_libraries(tetris-simulation-tests PRIVATE tetris-game)
+    tetris_target_defaults(tetris-simulation-tests)
+    add_test(NAME tetris_simulation COMMAND tetris-simulation-tests)
+
+    add_executable(tetris-multiplayer-tests tests/multiplayer_tests.cpp)
+    target_link_libraries(tetris-multiplayer-tests PRIVATE tetris-game)
+    tetris_target_defaults(tetris-multiplayer-tests)
+    add_test(NAME tetris_multiplayer COMMAND tetris-multiplayer-tests)
+
     add_executable(tetris-flow-tests tests/flow_tests.cpp)
     target_link_libraries(tetris-flow-tests PRIVATE tetris-game)
     tetris_target_defaults(tetris-flow-tests)

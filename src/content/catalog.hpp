@@ -2,6 +2,7 @@
 
 #include "content/rom.hpp"
 #include "content/audio.hpp"
+#include "content/provenance.hpp"
 #include "game/demo_data.hpp"
 #include "game/input.hpp"
 #include "game/piece.hpp"
@@ -14,13 +15,6 @@
 #include <vector>
 
 namespace tetris::content {
-
-struct Provenance {
-    std::string id;
-    std::size_t begin{};
-    std::size_t end{};
-    std::string format;
-};
 
 struct Tile {
     std::array<std::uint8_t, 64> pixels{};
@@ -56,6 +50,7 @@ struct SpriteObject {
 };
 
 struct Sprite {
+    Provenance source;
     std::uint8_t id{};
     int origin_x{};
     int origin_y{};
@@ -65,6 +60,19 @@ struct Sprite {
 struct SpriteCatalog {
     Provenance source;
     std::vector<Sprite> sprites;
+};
+
+struct TetrominoDefinition {
+    Provenance source;
+    tetris::PieceSpec piece;
+    std::array<tetris::Cell, 4> cells{};
+    std::array<std::uint8_t, 4> tiles{};
+};
+
+struct GameplayCatalog {
+    Provenance gravity_source;
+    std::array<std::uint8_t, 21> gravity_frames{};
+    std::array<TetrominoDefinition, 28> tetrominoes{};
 };
 
 struct Catalog {
@@ -82,6 +90,7 @@ struct Catalog {
     std::vector<ByteTable> presentation;
     std::vector<Tilemap> tilemaps;
     SpriteCatalog sprites;
+    GameplayCatalog gameplay;
     AudioCatalog audio;
 
     std::size_t tile_count() const;

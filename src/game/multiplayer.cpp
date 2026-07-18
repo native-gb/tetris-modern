@@ -34,12 +34,12 @@ bool terminal(const SinglePlayer& game) {
 
 } // namespace
 
-std::array<PieceKind, versus_piece_count> make_versus_piece_sequence(
+std::array<PieceSpec, versus_piece_count> make_versus_piece_sequence(
     std::span<const RandomSamples> samples) {
     assert(samples.size() >= static_cast<std::size_t>(versus_piece_count + 3));
-    std::array<PieceKind, versus_piece_count> pieces{};
-    PieceKind preview = PieceKind::L;
-    PieceKind hidden = PieceKind::L;
+    std::array<PieceSpec, versus_piece_count> pieces{};
+    PieceSpec preview{};
+    PieceSpec hidden{};
     for (std::size_t index = 0; index < static_cast<std::size_t>(versus_piece_count + 3); ++index) {
         const PieceQueue result = advance_piece_queue(preview, hidden, samples[index]);
         preview = result.preview;
@@ -73,8 +73,10 @@ void VersusMatch::begin_round(VersusSetup setup, const VersusRandom& random) {
         player.pending = 0;
         player.queued = 0;
     }
-    const int value = static_cast<int>(random.pieces.back());
-    garbage_hole_ = (value == 0 ? 255 : value - 1) % board_width;
+    const PieceSpec last = random.pieces.back();
+    const int piece_code = static_cast<int>(last.kind) * 4 + static_cast<int>(last.rotation);
+    const int decrements = piece_code == 0 ? 256 : piece_code;
+    garbage_hole_ = (decrements - 1) % board_width;
     state_ = MatchState::playing;
     winner_ = RoundWinner::none;
     paused_ = false;
@@ -140,9 +142,15 @@ void VersusMatch::finish(RoundWinner winner) {
         ++wins_[0];
     if (winner == RoundWinner::player_two)
         ++wins_[1];
-    state_ = wins_[0] >= wins_for_match || wins_[1] >= wins_for_match
-                 ? MatchState::match_over
-                 : MatchState::round_over;
+    if (wins_[0] >= wins_for_match || wins_[1] >= wins_for_match) {
+        state_ = MatchState::match_over;
+        if (wins_[0] >= wins_for_match)
+            wins_[0] = winner_display_wins;
+        if (wins_[1] >= wins_for_match)
+            wins_[1] = winner_display_wins;
+    } else {
+        state_ = MatchState::round_over;
+    }
 }
 
 void VersusMatch::set_line_clear_speed(LineClearSpeed speed) {

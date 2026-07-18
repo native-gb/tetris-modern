@@ -244,10 +244,10 @@ void GameFlow::tick_gameplay(const FlowInput& input) {
 void GameFlow::begin_demo(const FlowInput& input) {
     demo_type_b_ = next_demo_type_b_;
     next_demo_type_b_ = !next_demo_type_b_;
-    std::vector<PieceKind> pieces;
+    std::vector<PieceSpec> pieces;
     const std::size_t begin = demo_type_b_ ? 17U : 0U;
     for (std::size_t index = begin; index < resources_.demo_pieces.size(); ++index)
-        pieces.push_back(resources_.demo_pieces[index].kind);
+        pieces.push_back(resources_.demo_pieces[index]);
     game_.start({.type = demo_type_b_ ? GameType::type_b : GameType::type_a,
                  .starting_level = 9, .type_b_height = demo_type_b_ ? 2 : 0},
                 input.startup, pieces);
@@ -293,6 +293,8 @@ void GameFlow::tick_versus(const FlowInput& input, const Buttons& pressed,
             }
             versus_.set_line_clear_speed(line_clear_speed_);
             screen_ = Screen::versus_gameplay;
+            result_timer_ = 0;
+            result_step_ = 0;
             result_elapsed_ = 0;
         }
         return;

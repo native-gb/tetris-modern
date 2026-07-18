@@ -1,5 +1,6 @@
 #pragma once
 
+#include "content/provenance.hpp"
 #include "content/rom.hpp"
 
 #include <array>
@@ -20,6 +21,7 @@ struct SoundStep {
 };
 
 struct SoundEffect {
+    Provenance source;
     std::string id;
     SoundChannel channel{};
     std::uint8_t original_id{};
@@ -32,6 +34,7 @@ struct SoundEffect {
 };
 
 struct Song {
+    Provenance source;
     std::string id;
     std::array<std::uint8_t, 16> durations{};
     std::array<std::size_t, 4> channels{};
@@ -46,11 +49,13 @@ struct MusicCommand {
 };
 
 struct MusicSection {
+    Provenance source;
     std::uint16_t source_address{};
     std::vector<MusicCommand> commands;
 };
 
 struct MusicSequence {
+    Provenance source;
     std::uint16_t source_address{};
     std::vector<std::size_t> sections;
     std::size_t loop{no_music_index};
@@ -58,6 +63,8 @@ struct MusicSequence {
 };
 
 struct AudioCatalog {
+    Provenance source;
+    std::vector<std::uint8_t> source_bytes;
     std::vector<Song> songs;
     std::vector<MusicSequence> sequences;
     std::vector<MusicSection> sections;
@@ -68,6 +75,12 @@ struct AudioCatalog {
     std::array<std::uint8_t, 55> vibrato{};
     std::array<std::uint16_t, 73> pitches{};
     std::array<std::uint8_t, 21> noise_notes{};
+    Provenance pause_notes_source;
+    Provenance stereo_source;
+    Provenance vibrato_source;
+    Provenance pitches_source;
+    Provenance noise_notes_source;
+    Provenance waves_source;
 };
 
 bool extract_audio(const Rom& rom, AudioCatalog& result, std::string& error);

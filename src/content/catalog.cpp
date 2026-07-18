@@ -1,5 +1,7 @@
 #include "content/catalog.hpp"
 
+#include "game/rules.hpp"
+
 #include <algorithm>
 #include <array>
 #include <limits>
@@ -21,6 +23,12 @@ struct MapRange {
     int height;
     bool terminator;
 };
+
+Provenance source_for(const Range& range, std::size_t expected_count,
+                      std::size_t decoded_count) {
+    return provenance(range.id, {range.begin, range.end}, range.format,
+                      expected_count, decoded_count);
+}
 
 constexpr std::array tile_ranges = {
     Range{"gameplay", 0x323F, 0x3E8F, "gameboy-2bpp"},
@@ -121,10 +129,10 @@ bool extract_tiles(const Rom& rom, const Range& range, TileSet& result, std::str
         return false;
     }
     TileSet tiles;
-    tiles.source = {std::string(range.id), range.begin, range.end, std::string(range.format)};
     tiles.tiles.reserve(bytes.size() / stride);
     for (std::size_t offset = 0; offset < bytes.size(); offset += stride)
         tiles.tiles.push_back(decode_tile(bytes.subspan(offset, stride), one_bit));
+    tiles.source = source_for(range, bytes.size() / stride, tiles.tiles.size());
     result = std::move(tiles);
     return true;
 }
@@ -136,9 +144,9 @@ bool extract_demo(const Rom& rom, const Range& range, Demo& result, std::string&
         return false;
     }
     Demo demo;
-    demo.source = {std::string(range.id), range.begin, range.end, std::string(range.format)};
     for (std::size_t index = 0; index < bytes.size(); index += 2)
         demo.runs.push_back({buttons_from_byte(bytes[index]), bytes[index + 1]});
+    demo.source = source_for(range, bytes.size() / 2, demo.runs.size());
     result = std::move(demo);
     return true;
 }
@@ -159,7 +167,8 @@ bool extract_sprites(const Rom& rom, SpriteCatalog& result, std::string& error) 
         Matrix{0x31F5, 28}, Matrix{0x322D, 9},
     };
     SpriteCatalog catalog;
-    catalog.source = {"metasprite-catalog", 0x2B64, 0x323F, "pointer-metasprites"};
+    catalog.source = provenance("metasprite-catalog", {0x2B64, 0x323F},
+                                "pointer-metasprites", 94, 94);
     for (std::size_t id = 0; id < 94; ++id) {
         const std::size_t descriptor = word(rom, 0x2B64 + id * 2);
         const std::size_t tile_list = word(rom, descriptor);
@@ -203,9 +212,74 @@ bool extract_sprites(const Rom& rom, SpriteCatalog& result, std::string& error) 
                 });
             }
         }
+        sprite.source = provenance(
+            "metasprite-" + std::to_string(id),
+            {{0x2B64 + id * 2, 0x2B66 + id * 2},
+             {descriptor, descriptor + 4},
+             {tile_list, cursor},
+             {matrix->begin, matrix->begin + position * 2}},
+            "pointer-descriptor-tile-list-matrix", sprite.objects.size(),
+            sprite.objects.size());
         catalog.sprites.push_back(std::move(sprite));
     }
     result = std::move(catalog);
+    return true;
+}
+
+bool extract_gameplay(const Rom& rom, const SpriteCatalog& sprites,
+                      GameplayCatalog& result, std::string& error) {
+    GameplayCatalog gameplay;
+    constexpr RomSpan gravity_span{0x1B06, 0x1B1B};
+    const auto gravity = rom.range(gravity_span.begin, gravity_span.end);
+    const auto& expected_gravity = gravity_table();
+    if (gravity.size() != gameplay.gravity_frames.size()) {
+        error = "invalid gravity table size";
+        return false;
+    }
+    for (std::size_t index = 0; index < gravity.size(); ++index) {
+        gameplay.gravity_frames[index] = gravity[index];
+        if (static_cast<int>(gravity[index]) != expected_gravity[index]) {
+            error = "gravity table does not match the supported rules profile";
+            return false;
+        }
+    }
+    gameplay.gravity_source = provenance("gravity-frames", gravity_span,
+                                         "byte-per-level", 21, gravity.size());
+
+    if (sprites.sprites.size() < gameplay.tetrominoes.size()) {
+        error = "metasprite catalog does not contain all tetromino orientations";
+        return false;
+    }
+    for (std::size_t index = 0; index < gameplay.tetrominoes.size(); ++index) {
+        const Sprite& sprite = sprites.sprites[index];
+        if (sprite.objects.size() != 4) {
+            error = "tetromino metasprite does not contain four blocks";
+            return false;
+        }
+        TetrominoDefinition definition;
+        definition.source = sprite.source;
+        definition.source.id = "tetromino-" + std::to_string(index);
+        definition.piece = {
+            .kind = static_cast<PieceKind>(index / 4),
+            .rotation = static_cast<Rotation>(index % 4),
+        };
+        for (std::size_t block = 0; block < sprite.objects.size(); ++block) {
+            const SpriteObject& object = sprite.objects[block];
+            if (object.x < 0 || object.y < 0 || object.x % 8 != 0 || object.y % 8 != 0) {
+                error = "tetromino metasprite is not aligned to the 4x4 cell matrix";
+                return false;
+            }
+            definition.cells[block] = {object.x / 8, object.y / 8};
+            definition.tiles[block] = object.tile;
+        }
+        if (definition.cells != piece_cells(definition.piece)) {
+            error = "tetromino geometry does not match the supported rules profile at index " +
+                    std::to_string(index);
+            return false;
+        }
+        gameplay.tetrominoes[index] = std::move(definition);
+    }
+    result = std::move(gameplay);
     return true;
 }
 
@@ -248,7 +322,6 @@ bool extract_catalog(const Rom& rom, Catalog& result, std::string& error) {
         !extract_demo(rom, {"type-b-demo", 0x63B0, 0x6450, "joypad-rle"}, catalog.type_b_demo, error))
         return false;
 
-    catalog.demo_piece_source = {"demo-pieces", 0x6450, 0x6480, "piece-codes"};
     for (const std::uint8_t code : rom.range(0x6450, 0x6480)) {
         if (code > 0x1B) {
             error = "invalid piece in demo sequence";
@@ -259,14 +332,18 @@ bool extract_catalog(const Rom& rom, Catalog& result, std::string& error) {
             .rotation = static_cast<Rotation>(code & 3U),
         });
     }
+    catalog.demo_piece_source = provenance("demo-pieces", {0x6450, 0x6480},
+                                           "piece-codes", 48,
+                                           catalog.demo_pieces.size());
     catalog.type_b_demo_garbage = {
-        .source = {"type-b-demo-garbage", 0x1B40, 0x1B68, "raw-board-cells"},
+        .source = provenance("type-b-demo-garbage", {0x1B40, 0x1B68},
+                             "raw-board-cells", 40, 40),
         .bytes = {rom.bytes.begin() + 0x1B40, rom.bytes.begin() + 0x1B68},
     };
 
     for (const Range& range : presentation_ranges) {
         catalog.presentation.push_back({
-            .source = {std::string(range.id), range.begin, range.end, std::string(range.format)},
+            .source = source_for(range, range.end - range.begin, range.end - range.begin),
             .bytes = {rom.bytes.begin() + static_cast<std::ptrdiff_t>(range.begin),
                       rom.bytes.begin() + static_cast<std::ptrdiff_t>(range.end)},
         });
@@ -279,8 +356,7 @@ bool extract_catalog(const Rom& rom, Catalog& result, std::string& error) {
             return false;
         }
         catalog.tilemaps.push_back({
-            .source = {std::string(definition.range.id), definition.range.begin,
-                       definition.range.end, std::string(definition.range.format)},
+            .source = source_for(definition.range, cells, cells),
             .width = definition.width,
             .height = definition.height,
             .tiles = {rom.bytes.begin() + static_cast<std::ptrdiff_t>(definition.range.begin),
@@ -288,6 +364,7 @@ bool extract_catalog(const Rom& rom, Catalog& result, std::string& error) {
         });
     }
     if (!extract_sprites(rom, catalog.sprites, error) ||
+        !extract_gameplay(rom, catalog.sprites, catalog.gameplay, error) ||
         !extract_audio(rom, catalog.audio, error))
         return false;
     result = std::move(catalog);

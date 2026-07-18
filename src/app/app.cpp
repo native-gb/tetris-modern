@@ -43,6 +43,7 @@ struct State {
     ControlsMenu controls;
     Replay replay;
     audio::Output audio;
+    FlowInput last_input{};
     std::uint8_t divider{1};
 };
 
@@ -225,14 +226,70 @@ void process_replay(State& state, const std::string& rom_sha1) {
     }
 }
 
+SinglePlayer& command_game(State& state, std::uint32_t player) {
+    if (state.flow.screen() == Screen::versus_gameplay)
+        return state.flow.edit_versus().edit_player(player == 0 ? 0 : 1);
+    return state.flow.edit_game();
+}
+
+void apply_debug_command(State& state) {
+    const DebugCommand command = state.debug.command;
+    state.debug.command = {};
+    if (command.type == DebugCommandType::none)
+        return;
+    state.replay.stop(state.divider);
+    if (command.type == DebugCommandType::start_type_a ||
+        command.type == DebugCommandType::start_type_b) {
+        const GameType type = command.type == DebugCommandType::start_type_a
+                                  ? GameType::type_a
+                                  : GameType::type_b;
+        state.flow.start_game_for_test(
+            {.type = type, .starting_level = command.first,
+             .type_b_height = type == GameType::type_b ? command.second : 0},
+            startup_random(state));
+        state.flow.set_line_clear_speed(state.settings.line_clear_speed);
+        return;
+    }
+
+    const std::uint32_t player = command.type == DebugCommandType::toggle_cell
+                                     ? command.value
+                                     : 0;
+    SinglePlayer& game = command_game(state, player);
+    if (command.type == DebugCommandType::clear_board) {
+        game.edit_board().clear();
+    } else if (command.type == DebugCommandType::prepare_tetris) {
+        game.edit_board().clear();
+        for (int row = 14; row < board_height; ++row) {
+            for (int column = 0; column < board_width; ++column) {
+                if (column != 6)
+                    game.edit_board().set({column, row}, Block::j);
+            }
+        }
+        game.place_piece_for_test({.kind = PieceKind::I, .rotation = Rotation::right,
+                                   .origin = {5, 14}});
+    } else if (command.type == DebugCommandType::toggle_cell) {
+        const Cell cell{command.first, command.second};
+        const Block next = game.board().at(cell) == Block::empty ? Block::t : Block::empty;
+        game.edit_board().set(cell, next);
+    } else if (command.type == DebugCommandType::set_score) {
+        game.set_score_for_test(command.value);
+    } else if (command.type == DebugCommandType::force_game_over) {
+        game.set_state_for_test(PlayState::game_over);
+    } else if (command.type == DebugCommandType::force_complete) {
+        game.set_state_for_test(PlayState::complete);
+    }
+}
+
 void step(State& state, Buttons one, Buttons two) {
     if (state.replay.playing()) {
         const std::optional<FlowInput> input = state.replay.next(state.divider);
         if (!input)
             return;
+        state.last_input = *input;
         state.flow.tick(*input);
     } else {
         FlowInput input = make_input(state, one, two);
+        state.last_input = input;
         state.flow.tick(input);
         state.replay.append(std::move(input), state.divider);
     }
@@ -341,6 +398,8 @@ int run(const content::Rom& rom, const content::Catalog& content, int frame_limi
         gubsy_update_device_state(runtime);
         Buttons one = read_buttons(runtime, 0);
         Buttons two = read_buttons(runtime, 1);
+        const Buttons raw_one = one;
+        const Buttons raw_two = two;
         if (state.controls.chord_pressed(one))
             (void)state.controls.open(runtime);
         if (state.debug.open_controls) {
@@ -359,6 +418,7 @@ int run(const content::Rom& rom, const content::Catalog& content, int frame_limi
 
         process_replay(state, rom.digest);
         while (accumulator >= fixed_step) {
+            apply_debug_command(state);
             if ((!state.debug.paused || state.debug.step) && !editing_controls) {
                 step(state, one, two);
                 state.debug.step = false;
@@ -375,7 +435,21 @@ int run(const content::Rom& rom, const content::Catalog& content, int frame_limi
         state.debug.replay_playing = state.replay.playing();
         state.debug.replay_position = state.replay.position();
         state.debug.replay_size = state.replay.size();
-        if (draw_debug_ui(state.debug, state.flow, state.settings, content, state.audio)) {
+        int gamepad_count = 0;
+        SDL_JoystickID* gamepads = SDL_GetGamepads(&gamepad_count);
+        SDL_free(gamepads);
+        const HostDebug host{
+            .player_one = raw_one,
+            .player_two = raw_two,
+            .random = state.last_input.random,
+            .divider = state.divider,
+            .frame_seconds = elapsed,
+            .accumulator_seconds = accumulator,
+            .render_width = frame.render_width,
+            .render_height = frame.render_height,
+            .connected_gamepads = gamepad_count,
+        };
+        if (draw_debug_ui(state.debug, state.flow, state.settings, content, state.audio, host)) {
             state.flow.set_line_clear_speed(state.settings.line_clear_speed);
             state.audio.set_volume(state.settings.music_volume, state.settings.effects_volume);
             (void)presentation::save_settings(settings_path, state.settings, settings_error);

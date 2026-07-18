@@ -11,6 +11,7 @@ namespace {
 
 constexpr std::size_t song_headers = 0x6F3F;
 constexpr std::size_t song_headers_end = 0x6FFA;
+constexpr std::size_t audio_start = 0x6480;
 constexpr std::size_t audio_end = 0x7FF0;
 
 std::uint16_t word(const Rom& rom, std::size_t address) {
@@ -29,6 +30,8 @@ SoundEffect effect(const Rom& rom, std::string_view id, SoundChannel channel,
                    std::uint8_t original_id, std::uint16_t duration,
                    std::size_t data, int register_count) {
     SoundEffect result;
+    result.source = provenance(id, {data, data + static_cast<std::size_t>(register_count)},
+                               "game-boy-register-script", 1, 1);
     result.id = id;
     result.channel = channel;
     result.original_id = original_id;
@@ -45,6 +48,11 @@ void full_step(SoundEffect& sound, const Rom& rom, std::uint16_t tick, std::size
     for (std::size_t index = 0; index < sound.register_count; ++index)
         step.writes[index] = true;
     sound.steps.push_back(step);
+    sound.source.spans.push_back({address, address + sound.register_count});
+}
+
+void source_span(SoundEffect& sound, std::size_t begin, std::size_t end) {
+    sound.source.spans.push_back({begin, end});
 }
 
 void frequency_step(SoundEffect& sound, std::uint16_t tick, std::uint8_t frequency) {
@@ -71,6 +79,8 @@ void extract_pulse_effects(const Rom& rom, AudioCatalog& audio) {
         step.writes[2] = step.writes[3] = step.writes[4] = true;
         rotate.steps.push_back(step);
     }
+    source_span(rotate, 0x66F1, 0x66F6);
+    source_span(rotate, 0x66F7, 0x66FC);
     audio.effects.push_back(std::move(rotate));
     audio.effects.push_back(effect(rom, "shift", SoundChannel::pulse, 4, 2, 0x6623, 5));
     audio.effects.push_back(effect(rom, "garbage", SoundChannel::pulse, 5, 40, 0x6740, 5));
@@ -85,6 +95,8 @@ void extract_pulse_effects(const Rom& rom, AudioCatalog& audio) {
         step.writes[2] = step.writes[3] = step.writes[4] = true;
         line.steps.push_back(step);
     }
+    source_span(line, 0x669A, 0x66A4);
+    source_span(line, 0x66A5, 0x66AF);
     audio.effects.push_back(std::move(line));
 
     SoundEffect tetris = effect(rom, "tetris", SoundChannel::pulse, 7, 24, 0x65E7, 5);
@@ -112,6 +124,8 @@ void extract_noise_effects(const Rom& rom, AudioCatalog& audio) {
         step.writes[1] = step.writes[2] = step.writes[3] = true;
         liftoff.steps.push_back(step);
     }
+    source_span(liftoff, 0x6755, 0x6779);
+    source_span(liftoff, 0x6779, 0x679D);
     audio.effects.push_back(std::move(liftoff));
 }
 
@@ -139,6 +153,7 @@ bool valid_music_address(std::uint16_t address) {
 
 struct DecodedSequence {
     std::uint16_t address{};
+    std::uint16_t end{};
     std::vector<std::uint16_t> sections;
     std::uint16_t loop{};
     bool stops{};
@@ -172,6 +187,7 @@ bool decode_sequence(const Rom& rom, std::uint16_t address,
         }
         sequence.sections.push_back(value);
     }
+    sequence.end = static_cast<std::uint16_t>(cursor);
     result = std::move(sequence);
     return true;
 }
@@ -186,6 +202,9 @@ bool decode_section(const Rom& rom, std::uint16_t address,
         command.opcode = rom.bytes[cursor++];
         if (command.opcode == 0) {
             section.commands.push_back(command);
+            section.source = provenance("music-section-" + std::to_string(address),
+                                        {address, cursor}, "music-bytecode",
+                                        section.commands.size(), section.commands.size());
             result = std::move(section);
             return true;
         }
@@ -218,6 +237,12 @@ bool extract_audio(const Rom& rom, AudioCatalog& result, std::string& error) {
         return false;
     }
     AudioCatalog audio;
+    audio.source = provenance("original-audio", {audio_start, audio_end},
+                              "tetris-audio-driver-data", audio_end - audio_start,
+                              audio_end - audio_start);
+    audio.source_bytes.assign(
+        rom.bytes.begin() + static_cast<std::ptrdiff_t>(audio_start),
+        rom.bytes.begin() + static_cast<std::ptrdiff_t>(audio_end));
     extract_pulse_effects(rom, audio);
     extract_noise_effects(rom, audio);
     extract_wave_effects(rom, audio);
@@ -239,6 +264,18 @@ bool extract_audio(const Rom& rom, AudioCatalog& result, std::string& error) {
         for (std::size_t byte = 0; byte < 16; ++byte)
             audio.waves[wave][byte] = rom.bytes[0x6EA9 + wave * 16 + byte];
     }
+    audio.pause_notes_source = provenance("pause-notes", {0x657B, 0x6583},
+                                          "register-payloads", 2, 2);
+    audio.stereo_source = provenance("song-stereo", {0x6ABE, 0x6B02},
+                                     "four-byte-song-settings", 17, 17);
+    audio.vibrato_source = provenance("vibrato", {0x6DCB, 0x6E02},
+                                      "signed-offset-table", 55, 55);
+    audio.pitches_source = provenance("note-pitches", {0x6E02, 0x6E94},
+                                      "little-endian-period-table", 73, 73);
+    audio.noise_notes_source = provenance("noise-notes", {0x6E94, 0x6EA9},
+                                          "noise-register-table", 21, 21);
+    audio.waves_source = provenance("wave-patterns", {0x6EA9, 0x6EF9},
+                                    "packed-wave-ram", 5, 5);
 
     constexpr std::array<std::string_view, 17> names = {
         "top-score", "stage-clear", "title", "game-over", "type-a-korobeiniki",
@@ -269,6 +306,12 @@ bool extract_audio(const Rom& rom, AudioCatalog& result, std::string& error) {
             if (song_sequences[index][channel] != 0)
                 sequence_addresses.insert(song_sequences[index][channel]);
         }
+        song.source = provenance(
+            song.id,
+            {{0x64B0 + index * 2, 0x64B2 + index * 2},
+             {address, address + 11},
+             {timing_address, timing_address + song.durations.size()}},
+            "song-header-duration-and-channels", 4, 4);
         audio.songs.push_back(std::move(song));
     }
 
@@ -310,6 +353,10 @@ bool extract_audio(const Rom& rom, AudioCatalog& result, std::string& error) {
         const DecodedSequence& decoded_sequence = decoded_sequences[index];
         MusicSequence& sequence = audio.sequences[index];
         sequence.source_address = decoded_sequence.address;
+        sequence.source = provenance(
+            "music-sequence-" + std::to_string(decoded_sequence.address),
+            {decoded_sequence.address, decoded_sequence.end}, "music-section-pointers",
+            decoded_sequence.sections.size(), decoded_sequence.sections.size());
         sequence.stops = decoded_sequence.stops;
         if (decoded_sequence.loop != 0) {
             const auto loop = sequence_indices.find(decoded_sequence.loop);
@@ -340,6 +387,11 @@ bool extract_audio(const Rom& rom, AudioCatalog& result, std::string& error) {
             }
             audio.songs[song_index].channels[channel] = sequence->second;
         }
+    }
+    for (SoundEffect& sound : audio.effects) {
+        sound.source.expected_count = sound.steps.size() + 1;
+        sound.source.decoded_count = sound.steps.size() + 1;
+        sound.source.validated = true;
     }
     result = std::move(audio);
     return true;

@@ -11,7 +11,7 @@ using Shape = std::array<Cell, 4>;
 using Rotations = std::array<Shape, 4>;
 
 constexpr std::array<Rotations, 7> shapes = {{
-    Rotations{{Shape{{{0, 2}, {1, 2}, {2, 2}, {0, 3}}}, Shape{{{1, 1}, {1, 2}, {1, 3}, {2, 3}}}, Shape{{{2, 1}, {0, 2}, {1, 2}, {2, 2}}}, Shape{{{0, 0}, {1, 0}, {1, 1}, {1, 2}}}}},
+    Rotations{{Shape{{{0, 2}, {1, 2}, {2, 2}, {0, 3}}}, Shape{{{1, 1}, {1, 2}, {1, 3}, {2, 3}}}, Shape{{{2, 1}, {0, 2}, {1, 2}, {2, 2}}}, Shape{{{0, 1}, {1, 1}, {1, 2}, {1, 3}}}}},
     Rotations{{Shape{{{0, 2}, {1, 2}, {2, 2}, {2, 3}}}, Shape{{{1, 1}, {2, 1}, {1, 2}, {1, 3}}}, Shape{{{0, 1}, {0, 2}, {1, 2}, {2, 2}}}, Shape{{{1, 1}, {1, 2}, {0, 3}, {1, 3}}}}},
     Rotations{{Shape{{{0, 2}, {1, 2}, {2, 2}, {3, 2}}}, Shape{{{1, 0}, {1, 1}, {1, 2}, {1, 3}}}, Shape{{{0, 2}, {1, 2}, {2, 2}, {3, 2}}}, Shape{{{1, 0}, {1, 1}, {1, 2}, {1, 3}}}}},
     Rotations{{Shape{{{1, 2}, {2, 2}, {1, 3}, {2, 3}}}, Shape{{{1, 2}, {2, 2}, {1, 3}, {2, 3}}}, Shape{{{1, 2}, {2, 2}, {1, 3}, {2, 3}}}, Shape{{{1, 2}, {2, 2}, {1, 3}, {2, 3}}}}},
@@ -30,6 +30,10 @@ std::size_t index_of(Rotation rotation) {
 
 } // namespace
 
+FallingPiece spawn_piece(PieceSpec piece) {
+    return {.kind = piece.kind, .rotation = piece.rotation, .origin = {3, -1}};
+}
+
 Rotation clockwise(Rotation rotation) {
     const auto value = static_cast<unsigned int>(rotation);
     return static_cast<Rotation>((value + 3U) % 4U);
@@ -41,12 +45,16 @@ Rotation counterclockwise(Rotation rotation) {
 }
 
 std::array<Cell, 4> occupied_cells(const FallingPiece& piece) {
-    auto cells = shapes[index_of(piece.kind)][index_of(piece.rotation)];
+    auto cells = piece_cells({piece.kind, piece.rotation});
     for (Cell& cell : cells) {
         cell.x += piece.origin.x;
         cell.y += piece.origin.y;
     }
     return cells;
+}
+
+std::array<Cell, 4> piece_cells(PieceSpec piece) {
+    return shapes[index_of(piece.kind)][index_of(piece.rotation)];
 }
 
 std::array<Block, 4> blocks_for(const FallingPiece& piece) {

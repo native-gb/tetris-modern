@@ -169,8 +169,9 @@ std::uint8_t piece_id(const FallingPiece& piece) {
                                      static_cast<unsigned int>(piece.rotation));
 }
 
-std::uint8_t piece_id(PieceKind piece) {
-    return static_cast<std::uint8_t>(static_cast<unsigned int>(piece) * 4U);
+std::uint8_t piece_id(PieceSpec piece) {
+    return static_cast<std::uint8_t>(static_cast<unsigned int>(piece.kind) * 4U +
+                                     static_cast<unsigned int>(piece.rotation));
 }
 
 int wrapped_add(std::uint8_t raw, int first, int second) {

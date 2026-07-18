@@ -9,15 +9,18 @@ PieceKind piece_from_divider(std::uint8_t divider) {
     return static_cast<PieceKind>(additions % 7U);
 }
 
-PieceQueue advance_piece_queue(PieceKind preview, PieceKind hidden,
+PieceQueue advance_piece_queue(PieceSpec preview, PieceSpec hidden,
                                const RandomSamples& samples) {
-    PieceKind candidate = PieceKind::L;
+    PieceSpec candidate{};
     int attempts = 0;
 
     for (const std::uint8_t sample : samples) {
-        candidate = piece_from_divider(sample);
+        candidate = {.kind = piece_from_divider(sample)};
         ++attempts;
-        if (attempts == 3 || (candidate != preview && hidden != preview))
+        const auto history = static_cast<unsigned int>(preview.kind) |
+                             static_cast<unsigned int>(hidden.kind) |
+                             static_cast<unsigned int>(candidate.kind);
+        if (attempts == 3 || history != static_cast<unsigned int>(preview.kind))
             break;
     }
 

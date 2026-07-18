@@ -33,7 +33,7 @@ ClearTiming timing_for(LineClearSpeed speed) {
 } // namespace
 
 void SinglePlayer::start(GameRules rules, const StartupRandom& random,
-                         std::span<const PieceKind> fixed_pieces, Buttons initial_buttons) {
+                         std::span<const PieceSpec> fixed_pieces, Buttons initial_buttons) {
     assert(rules.starting_level >= 0 && rules.starting_level <= 9);
     assert(rules.type_b_height >= 0 && rules.type_b_height <= 5);
 
@@ -41,8 +41,8 @@ void SinglePlayer::start(GameRules rules, const StartupRandom& random,
     board_.clear();
     wipe_board_.clear();
     piece_ = {};
-    preview_ = PieceKind::L;
-    hidden_ = PieceKind::L;
+    preview_ = {};
+    hidden_ = {};
     state_ = PlayState::falling;
     previous_buttons_ = initial_buttons;
     paused_ = false;
@@ -69,7 +69,7 @@ void SinglePlayer::start(GameRules rules, const StartupRandom& random,
     tick_count_ = 0;
     events_.clear();
 
-    if (rules_.type == GameType::type_b) {
+    if (rules_.type == GameType::type_b || rules_.type == GameType::versus) {
         const int visible_rows = rules_.type_b_height * 2;
         for (int source_row = 0; source_row < visible_rows; ++source_row) {
             bool has_hole = false;
@@ -88,7 +88,7 @@ void SinglePlayer::start(GameRules rules, const StartupRandom& random,
     }
 
     if (rules_.type == GameType::versus && fixed_pieces_.size() >= 2) {
-        piece_ = {.kind = fixed_pieces_[0], .origin = spawn_origin};
+        piece_ = spawn_piece(fixed_pieces_[0]);
         preview_ = fixed_pieces_[1];
         hidden_ = fixed_pieces_[1];
         next_fixed_piece_ = 2;
@@ -370,7 +370,7 @@ void SinglePlayer::update_level() {
 }
 
 void SinglePlayer::spawn(const RandomSamples& random) {
-    PieceKind active = preview_;
+    PieceSpec active = preview_;
     if (next_fixed_piece_ < fixed_pieces_.size()) {
         preview_ = fixed_pieces_[next_fixed_piece_++];
     } else {
@@ -379,11 +379,11 @@ void SinglePlayer::spawn(const RandomSamples& random) {
         preview_ = queue.preview;
         hidden_ = queue.hidden;
     }
-    piece_ = {.kind = active, .rotation = Rotation::spawn, .origin = spawn_origin};
+    piece_ = spawn_piece(active);
     fall_timer_ = gravity_frames_;
     clearing_rows_.clear();
     state_ = PlayState::falling;
-    emit(GameEvent::spawned, static_cast<int>(active));
+    emit(GameEvent::spawned, static_cast<int>(active.kind));
 }
 
 void SinglePlayer::lose() {
@@ -414,7 +414,7 @@ const Board& SinglePlayer::presentation_board() const {
 }
 Board& SinglePlayer::edit_board() { return board_; }
 const FallingPiece& SinglePlayer::piece() const { return piece_; }
-PieceKind SinglePlayer::preview() const { return preview_; }
+PieceSpec SinglePlayer::preview() const { return preview_; }
 PlayState SinglePlayer::state() const { return state_; }
 GameRules SinglePlayer::rules() const { return rules_; }
 int SinglePlayer::level() const { return level_; }
@@ -435,7 +435,13 @@ int SinglePlayer::gravity_frames() const { return gravity_frames_; }
 int SinglePlayer::drop_timer() const { return fall_timer_; }
 int SinglePlayer::horizontal_repeat_timer() const { return horizontal_repeat_timer_; }
 std::size_t SinglePlayer::fixed_pieces_consumed() const { return next_fixed_piece_; }
+int SinglePlayer::locks_at_spawn() const { return locks_at_spawn_; }
 void SinglePlayer::place_piece_for_test(FallingPiece piece) { piece_ = piece; state_ = PlayState::falling; }
 void SinglePlayer::set_state_for_test(PlayState state) { state_ = state; }
+void SinglePlayer::set_score_for_test(std::uint32_t score) { score_ = std::min(score, maximum_score); }
+void SinglePlayer::set_results_for_test(LineCounts counts, std::uint32_t soft_drop_points) {
+    line_counts_ = counts;
+    soft_drop_points_ = soft_drop_points;
+}
 
 } // namespace tetris

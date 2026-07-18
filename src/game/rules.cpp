@@ -6,13 +6,17 @@
 
 namespace tetris {
 
-int frames_per_drop(int level, bool heart_mode) {
-    constexpr std::array<int, 21> frames = {
+const std::array<int, 21>& gravity_table() {
+    static constexpr std::array<int, 21> frames = {
         52, 48, 44, 40, 36, 32, 27, 21, 16, 10, 9,
         8, 7, 6, 5, 5, 4, 4, 3, 3, 2,
     };
+    return frames;
+}
+
+int frames_per_drop(int level, bool heart_mode) {
     const int index = std::clamp(level + (heart_mode ? 10 : 0), 0, 20);
-    return frames[static_cast<std::size_t>(index)];
+    return gravity_table()[static_cast<std::size_t>(index)];
 }
 
 std::uint32_t line_clear_score(int rows, int level) {

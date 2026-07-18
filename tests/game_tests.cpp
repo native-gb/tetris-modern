@@ -67,11 +67,48 @@ void test_rules_and_randomizer() {
            "gravity table retains original low-level timings");
     expect(frames_per_drop(0, true) == 9, "heart mode applies the ten-level speed offset");
     expect(line_clear_score(4, 9) == 12'000, "Tetris scoring includes level multiplier");
-    expect(piece_from_divider(1) == PieceKind::L, "divider one selects L");
-    expect(piece_from_divider(0) == PieceKind::O, "divider zero preserves wraparound behavior");
+    for (unsigned int value = 0; value <= 255; ++value) {
+        std::uint8_t counter = static_cast<std::uint8_t>(value);
+        unsigned int assembly_piece = 0;
+        while (true) {
+            --counter;
+            if (counter == 0)
+                break;
+            assembly_piece = (assembly_piece + 1U) % 7U;
+        }
+        expect(piece_from_divider(static_cast<std::uint8_t>(value)) ==
+                   static_cast<PieceKind>(assembly_piece),
+               "closed-form divider mapping matches the assembly loop");
+    }
 
-    const PieceQueue queue = advance_piece_queue(PieceKind::T, PieceKind::T, {1, 2, 3});
-    expect(queue.attempts == 3, "history rejection is capped at three samples");
+    const PieceQueue accepted = advance_piece_queue({PieceKind::L}, {PieceKind::L}, {1, 2, 3});
+    expect(accepted.attempts == 2 && accepted.hidden.kind == PieceKind::J,
+           "history rejection accepts the second distinct candidate");
+    const PieceQueue forced = advance_piece_queue({PieceKind::J}, {PieceKind::J}, {1, 2, 3});
+    expect(forced.attempts == 3 && forced.hidden.kind == PieceKind::I,
+           "history rejection is capped at three samples");
+    const PieceQueue oriented = advance_piece_queue(
+        {PieceKind::J, Rotation::left}, {PieceKind::I, Rotation::reverse}, {2, 0, 0});
+    expect(oriented.active == PieceSpec{PieceKind::J, Rotation::left} &&
+               oriented.preview == PieceSpec{PieceKind::I, Rotation::reverse},
+           "queued pieces preserve their semantic orientation");
+}
+
+void test_every_fixed_piece_orientation() {
+    using namespace tetris;
+    for (int kind = 0; kind < 7; ++kind) {
+        for (int rotation = 0; rotation < 4; ++rotation) {
+            const PieceSpec expected{static_cast<PieceKind>(kind),
+                                     static_cast<Rotation>(rotation)};
+            const std::array fixed = {PieceSpec{}, expected, PieceSpec{}};
+            SinglePlayer game;
+            game.start({}, startup_random(), fixed);
+            expect(game.piece().kind == expected.kind &&
+                       game.piece().rotation == expected.rotation &&
+                       game.piece().origin == Cell{3, -1},
+                   "all 28 fixed piece handoffs preserve orientation and spawn origin");
+        }
+    }
 }
 
 void tick_until_falling(tetris::SinglePlayer& game) {
@@ -87,7 +124,8 @@ void tick_until_falling(tetris::SinglePlayer& game) {
 void test_single_player_clear() {
     using namespace tetris;
     SinglePlayer game;
-    const std::array fixed = {PieceKind::I, PieceKind::O, PieceKind::T};
+    const std::array fixed = {PieceSpec{PieceKind::I}, PieceSpec{PieceKind::O},
+                              PieceSpec{PieceKind::T}};
     game.start({}, startup_random(), fixed);
     for (int column = 0; column < board_width; ++column) {
         if (column < 3 || column > 6)
@@ -119,6 +157,7 @@ int main() {
     test_board();
     test_piece_geometry();
     test_rules_and_randomizer();
+    test_every_fixed_piece_orientation();
     test_single_player_clear();
     test_type_b_start();
     if (failures != 0)

@@ -26,14 +26,29 @@ const char* state_name(PlayState state) {
     return names[static_cast<std::size_t>(state)];
 }
 
-void draw_board(const Board& board) {
+void queue(DebugUi& ui, DebugCommandType type, int first = 0, int second = 0,
+           std::uint32_t value = 0) {
+    ui.command = {type, first, second, value};
+}
+
+void draw_board(DebugUi& ui, const Board& board, int player) {
     for (int row = 0; row < board_height; ++row) {
         for (int column = 0; column < board_width; ++column) {
-            ImGui::TextUnformatted(board.at({column, row}) == Block::empty ? "." : "#");
+            ImGui::PushID(player * 1'000 + row * board_width + column);
+            if (ImGui::SmallButton(board.at({column, row}) == Block::empty ? "." : "#"))
+                queue(ui, DebugCommandType::toggle_cell, column, row,
+                      static_cast<std::uint32_t>(player));
+            ImGui::PopID();
             if (column + 1 != board_width)
                 ImGui::SameLine(0, 0);
         }
     }
+}
+
+void draw_buttons(const char* label, const Buttons& buttons) {
+    ImGui::Text("%s  L:%d R:%d U:%d D:%d  B:%d A:%d Start:%d Select:%d", label,
+                buttons.left, buttons.right, buttons.up, buttons.down,
+                buttons.rotate_left, buttons.rotate_right, buttons.start, buttons.select);
 }
 
 bool draw_settings(presentation::Settings& settings) {
@@ -111,10 +126,10 @@ void draw_audio(audio::Output& output, const content::Catalog& content) {
 
 } // namespace
 
-bool draw_debug_ui(DebugUi& ui, GameFlow& flow,
+bool draw_debug_ui(DebugUi& ui, const GameFlow& flow,
                    presentation::Settings& settings,
                    const content::Catalog& content,
-                   audio::Output& audio) {
+                   audio::Output& audio, const HostDebug& host) {
     if (!ui.visible)
         return false;
     bool settings_changed = false;
@@ -126,6 +141,10 @@ bool draw_debug_ui(DebugUi& ui, GameFlow& flow,
             ImGui::MenuItem("Events", nullptr, &ui.events_window);
             ImGui::MenuItem("Content", nullptr, &ui.content_window);
             ImGui::MenuItem("Replay", nullptr, &ui.replay_window);
+            ImGui::MenuItem("State setup", nullptr, &ui.setup_window);
+            ImGui::MenuItem("Randomizer", nullptr, &ui.randomizer_window);
+            ImGui::MenuItem("Input", nullptr, &ui.input_window);
+            ImGui::MenuItem("Display / performance", nullptr, &ui.display_window);
             ImGui::MenuItem("Enhancements", nullptr, &ui.settings_window);
             ImGui::MenuItem("Audio", nullptr, &ui.audio_window);
             if (ImGui::MenuItem("Controller / keyboard bindings", "F2"))
@@ -140,6 +159,24 @@ bool draw_debug_ui(DebugUi& ui, GameFlow& flow,
         }
         ImGui::EndMainMenuBar();
     }
+
+    ImGui::SetNextWindowSize(ImVec2(315.0F, 0.0F), ImGuiCond_FirstUseEver);
+    if (ImGui::Begin("Native Tetris Tools###ModernTetrisTools", &ui.visible,
+                     ImGuiWindowFlags_AlwaysAutoResize)) {
+        ImGui::TextDisabled("F1 toggles this launcher; tool windows stay open.");
+        ImGui::Checkbox("State", &ui.state_window);
+        ImGui::SameLine(); ImGui::Checkbox("Board", &ui.board_window);
+        ImGui::SameLine(); ImGui::Checkbox("Flow", &ui.flow_window);
+        ImGui::Checkbox("Setup", &ui.setup_window);
+        ImGui::SameLine(); ImGui::Checkbox("Input", &ui.input_window);
+        ImGui::SameLine(); ImGui::Checkbox("Randomizer", &ui.randomizer_window);
+        ImGui::Checkbox("Enhancements", &ui.settings_window);
+        ImGui::SameLine(); ImGui::Checkbox("Display", &ui.display_window);
+        ImGui::SameLine(); ImGui::Checkbox("Audio", &ui.audio_window);
+        if (ImGui::Button("Controller / keyboard bindings (F2)"))
+            ui.open_controls = true;
+    }
+    ImGui::End();
 
     if (ui.state_window) {
         const bool open = ImGui::Begin("Tetris State", &ui.state_window);
@@ -157,15 +194,28 @@ bool draw_debug_ui(DebugUi& ui, GameFlow& flow,
             ImGui::Text("Piece %d  Rotation %d  Origin (%d, %d)",
                         static_cast<int>(game.piece().kind), static_cast<int>(game.piece().rotation),
                         game.piece().origin.x, game.piece().origin.y);
-            ImGui::Text("Preview: %d  Visible: %s", static_cast<int>(game.preview()),
+            ImGui::Text("Preview: %d:%d  Visible: %s",
+                        static_cast<int>(game.preview().kind),
+                        static_cast<int>(game.preview().rotation),
                         game.preview_visible() ? "yes" : "no");
         }
         ImGui::End();
     }
 
     if (ui.board_window) {
-        if (ImGui::Begin("Board", &ui.board_window))
-            draw_board(flow.game().board());
+        if (ImGui::Begin("Board", &ui.board_window)) {
+            if (flow.screen() == Screen::versus_gameplay) {
+                ImGui::TextUnformatted("Player one");
+                draw_board(ui, flow.versus().player(0).board(), 0);
+                ImGui::SameLine();
+                ImGui::BeginGroup();
+                ImGui::TextUnformatted("Player two");
+                draw_board(ui, flow.versus().player(1).board(), 1);
+                ImGui::EndGroup();
+            } else {
+                draw_board(ui, flow.game().board(), 0);
+            }
+        }
         ImGui::End();
     }
 
@@ -200,12 +250,15 @@ bool draw_debug_ui(DebugUi& ui, GameFlow& flow,
             ImGui::Text("Presentation tables: %zu", content.presentation.size());
             ImGui::Text("Songs: %zu  Effects: %zu", content.audio.songs.size(),
                         content.audio.effects.size());
-            if (ImGui::BeginTable("Provenance", 3, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg)) {
+            if (ImGui::BeginTable("Provenance", 4, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg)) {
                 for (const content::Tilemap& map : content.tilemaps) {
                     ImGui::TableNextRow();
                     ImGui::TableNextColumn(); ImGui::TextUnformatted(map.source.id.c_str());
-                    ImGui::TableNextColumn(); ImGui::Text("0x%04zX", map.source.begin);
-                    ImGui::TableNextColumn(); ImGui::Text("0x%04zX", map.source.end);
+                    const content::RomSpan span = map.source.spans.front();
+                    ImGui::TableNextColumn(); ImGui::Text("0x%04zX", span.begin);
+                    ImGui::TableNextColumn(); ImGui::Text("0x%04zX", span.end);
+                    ImGui::TableNextColumn(); ImGui::Text("%zu/%zu%s", map.source.decoded_count,
+                        map.source.expected_count, map.source.validated ? "" : " !");
                 }
                 ImGui::EndTable();
             }
@@ -225,6 +278,82 @@ bool draw_debug_ui(DebugUi& ui, GameFlow& flow,
             if (ImGui::Button("Clear")) ui.replay_request = ReplayRequest::clear;
             ImGui::Text("%s  %zu / %zu", ui.replay_recording ? "recording" : ui.replay_playing ? "playing" : "idle",
                         ui.replay_position, ui.replay_size);
+        }
+        ImGui::End();
+    }
+
+    if (ui.setup_window) {
+        const bool open = ImGui::Begin("Semantic State Setup", &ui.setup_window);
+        if (open) {
+            ImGui::SliderInt("Level", &ui.setup_level, 0, 9);
+            ImGui::SliderInt("Type B height", &ui.setup_height, 0, 5);
+            if (ImGui::Button("Start Type A"))
+                queue(ui, DebugCommandType::start_type_a, ui.setup_level);
+            ImGui::SameLine();
+            if (ImGui::Button("Start Type B"))
+                queue(ui, DebugCommandType::start_type_b, ui.setup_level, ui.setup_height);
+            if (ImGui::Button("Clear board"))
+                queue(ui, DebugCommandType::clear_board);
+            ImGui::SameLine();
+            if (ImGui::Button("Prepare Tetris"))
+                queue(ui, DebugCommandType::prepare_tetris);
+            if (ImGui::Button("Force game over"))
+                queue(ui, DebugCommandType::force_game_over);
+            ImGui::SameLine();
+            if (ImGui::Button("Force complete"))
+                queue(ui, DebugCommandType::force_complete);
+            ImGui::InputScalar("Score", ImGuiDataType_U32, &ui.setup_score);
+            if (ImGui::Button("Set score"))
+                queue(ui, DebugCommandType::set_score, 0, 0, ui.setup_score);
+            ImGui::TextDisabled("Commands apply at the next fixed-tick boundary.");
+        }
+        ImGui::End();
+    }
+
+    if (ui.randomizer_window) {
+        const bool open = ImGui::Begin("Piece Randomizer", &ui.randomizer_window);
+        if (open) {
+            const SinglePlayer& game = flow.game();
+            ImGui::Text("Host divider state: %u", static_cast<unsigned int>(host.divider));
+            ImGui::Text("Last samples: %u, %u, %u",
+                        static_cast<unsigned int>(host.random[0]),
+                        static_cast<unsigned int>(host.random[1]),
+                        static_cast<unsigned int>(host.random[2]));
+            ImGui::Text("Active: %d:%d  Preview: %d:%d",
+                        static_cast<int>(game.piece().kind),
+                        static_cast<int>(game.piece().rotation),
+                        static_cast<int>(game.preview().kind),
+                        static_cast<int>(game.preview().rotation));
+            ImGui::Text("Fixed sequence consumed: %zu", game.fixed_pieces_consumed());
+        }
+        ImGui::End();
+    }
+
+    if (ui.input_window) {
+        const bool open = ImGui::Begin("Input Ownership", &ui.input_window);
+        if (open) {
+            draw_buttons("Player one", host.player_one);
+            draw_buttons("Player two", host.player_two);
+            ImGui::Text("Connected gamepads: %d", host.connected_gamepads);
+            ImGui::TextUnformatted("ImGui gamepad navigation: disabled");
+            if (ImGui::Button("Open persistent bindings"))
+                ui.open_controls = true;
+        }
+        ImGui::End();
+    }
+
+    if (ui.display_window) {
+        const bool open = ImGui::Begin("Display and Performance", &ui.display_window);
+        if (open) {
+            ImGui::Text("Render target: %d x %d", host.render_width, host.render_height);
+            ImGui::Text("Frame: %.3f ms", host.frame_seconds * 1'000.0);
+            ImGui::Text("Fixed-tick accumulator: %.3f ms",
+                        host.accumulator_seconds * 1'000.0);
+            ImGui::Text("Simulation tick: %llu",
+                        static_cast<unsigned long long>(flow.game().tick_count()));
+            ImGui::Text("Layout: %s", presentation::name(settings.layout));
+            ImGui::Text("Effects: %s", presentation::name(settings.effects));
+            ImGui::TextUnformatted("Simulation: 59.7275 Hz; rendering is independent.");
         }
         ImGui::End();
     }

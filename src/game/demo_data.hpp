@@ -10,9 +10,6 @@ struct DemoRun {
     int frames{};
 };
 
-struct DemoPiece {
-    PieceKind kind{};
-    Rotation rotation{};
-};
+using DemoPiece = PieceSpec;
 
 } // namespace tetris

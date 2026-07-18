@@ -8,6 +8,7 @@ namespace tetris {
 
 constexpr int versus_piece_count = 256;
 constexpr int wins_for_match = 4;
+constexpr int winner_display_wins = 5;
 
 enum class MatchState { playing, round_over, match_over };
 enum class RoundWinner { none, player_one, player_two, draw };
@@ -18,11 +19,11 @@ struct VersusSetup {
 };
 
 struct VersusRandom {
-    std::array<PieceKind, versus_piece_count> pieces{};
+    std::array<PieceSpec, versus_piece_count> pieces{};
     std::array<GarbageRandom, 100> garbage{};
 };
 
-std::array<PieceKind, versus_piece_count> make_versus_piece_sequence(
+std::array<PieceSpec, versus_piece_count> make_versus_piece_sequence(
     std::span<const RandomSamples> samples);
 
 class VersusMatch {

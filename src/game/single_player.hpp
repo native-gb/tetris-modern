@@ -83,7 +83,7 @@ struct StartupRandom {
 class SinglePlayer {
 public:
     void start(GameRules rules, const StartupRandom& random,
-               std::span<const PieceKind> fixed_pieces = {}, Buttons initial_buttons = {});
+               std::span<const PieceSpec> fixed_pieces = {}, Buttons initial_buttons = {});
     void tick(const TickInput& input);
 
     void set_line_clear_speed(LineClearSpeed speed);
@@ -94,7 +94,7 @@ public:
     const Board& presentation_board() const;
     Board& edit_board();
     const FallingPiece& piece() const;
-    PieceKind preview() const;
+    PieceSpec preview() const;
     PlayState state() const;
     GameRules rules() const;
     int level() const;
@@ -113,9 +113,12 @@ public:
     int drop_timer() const;
     int horizontal_repeat_timer() const;
     std::size_t fixed_pieces_consumed() const;
+    int locks_at_spawn() const;
 
     void place_piece_for_test(FallingPiece piece);
     void set_state_for_test(PlayState state);
+    void set_score_for_test(std::uint32_t score);
+    void set_results_for_test(LineCounts counts, std::uint32_t soft_drop_points);
 
 private:
     void rotate(const Buttons& pressed);
@@ -138,8 +141,8 @@ private:
     Board board_{};
     Board wipe_board_{};
     FallingPiece piece_{};
-    PieceKind preview_{PieceKind::L};
-    PieceKind hidden_{PieceKind::L};
+    PieceSpec preview_{};
+    PieceSpec hidden_{};
     PlayState state_{PlayState::game_over};
     Buttons previous_buttons_{};
     bool paused_{};
@@ -163,7 +166,7 @@ private:
     bool score_clear_when_wiping_{};
     LineClearSpeed line_clear_speed_{LineClearSpeed::original};
     std::vector<int> clearing_rows_{};
-    std::vector<PieceKind> fixed_pieces_{};
+    std::vector<PieceSpec> fixed_pieces_{};
     std::size_t next_fixed_piece_{};
     std::vector<Event> events_{};
 };

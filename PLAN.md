@@ -67,6 +67,16 @@ plain functions. Integer or fixed-point arithmetic is preferred for
 deterministic pixel behavior; floating point belongs at host presentation
 boundaries where exact simulation identity does not depend on it.
 
+Code quality is a first-class deliverable, equal to functional completeness.
+A working port that is still crunchy, assembly-shaped, over-abstracted, or
+difficult to read does not satisfy this plan. Before completion, perform a
+dedicated simplicity audit across every domain: remove accidental state and
+indirection, replace vague or encoded names, flatten unnecessary call chains,
+split oversized files only along cohesive ownership boundaries, and confirm
+that a reader can follow each important rule from input to state change without
+reverse-engineering the C++ itself. Do not use the clean rewrite as an excuse
+for cleverness; the smallest clear design wins.
+
 ## Clean architecture boundary
 
 The repository should remain mostly flat, with files grouped into a few clear
@@ -346,6 +356,9 @@ The clean implementation is complete only when:
   user ROM with exact provenance and no tracked extracted material;
 - the simulation contains no copied reference core, WRAM-shaped ownership,
   placeholder flow, stub behavior or unexplained magic state;
+- a final C+- simplicity audit finds no avoidable framework machinery, vague
+  ownership, encoded gameplay state, needless indirection, or function/file
+  structure that remains difficult to follow;
 - every currently shipped reference enhancement is present and independently
   configurable;
 - Original mode passes semantic/reference comparisons and Enhanced mode passes

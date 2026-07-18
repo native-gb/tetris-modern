@@ -85,6 +85,9 @@ proportionate evidence; it is not a progress estimate.
 
 ## Verification and promotion
 
+- [ ] Complete a final C+- simplicity and readability audit across every domain.
+- [ ] Remove avoidable indirection, vague ownership, encoded state and framework machinery.
+- [ ] Confirm core rules can be followed directly from input through state change.
 - [ ] Port focused semantic vectors from the reference evidence.
 - [ ] Cover every original mode, selection, ending and multiplayer result.
 - [ ] Add extraction, domain, flow, replay, audio and render tests.

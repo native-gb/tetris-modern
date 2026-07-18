@@ -85,7 +85,9 @@ proportionate evidence; it is not a progress estimate.
 
 ## Verification and promotion
 
-- [ ] Complete a final C+- simplicity and readability audit across every domain.
+- [ ] Complete a final C+- simplicity and readability audit across every domain;
+      reject Game Boy-shaped state, reference-port transliteration, needless
+      indirection, and abstractions that make the rules harder to follow.
 - [ ] Remove avoidable indirection, vague ownership, encoded state and framework machinery.
 - [ ] Confirm core rules can be followed directly from input through state change.
 - [ ] Port focused semantic vectors from the reference evidence.

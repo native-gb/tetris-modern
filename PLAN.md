@@ -49,6 +49,14 @@ of small, direct, legible code associated with Redis or a focused single-header
 library: concrete state, explicit updates, short call chains, and names that
 describe game concepts.
 
+The repository's C+- style is a completion requirement, not a secondary polish
+goal. The clean implementation should read like a small native game written
+from first principles: ordinary data, plain functions, obvious ownership, and
+the minimum machinery needed to express the rules. Preserve original behavior
+through clear domain concepts, not through Game Boy-shaped variables, encoded
+state, compatibility scaffolding, or a line-by-line transliteration of the
+reference port.
+
 Avoid architecture theater:
 
 - no generic ECS for seven pieces and a small number of presentation actors;

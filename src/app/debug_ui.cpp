@@ -26,6 +26,20 @@ const char* state_name(PlayState state) {
     return names[static_cast<std::size_t>(state)];
 }
 
+const char* event_name(GameEvent event) {
+    constexpr std::array names = {
+        "spawned", "moved", "rotated", "landed", "cleared lines", "score changed",
+        "level changed", "paused", "preview changed", "garbage applied", "game over",
+        "complete",
+    };
+    return names[static_cast<std::size_t>(event)];
+}
+
+bool versus_session(Screen screen) {
+    return screen == Screen::versus_gameplay || screen == Screen::versus_round_result ||
+           screen == Screen::versus_match_result;
+}
+
 void queue(DebugUi& ui, DebugCommandType type, int first = 0, int second = 0,
            std::uint32_t value = 0) {
     ui.command = {type, first, second, value};
@@ -49,6 +63,29 @@ void draw_buttons(const char* label, const Buttons& buttons) {
     ImGui::Text("%s  L:%d R:%d U:%d D:%d  B:%d A:%d Start:%d Select:%d", label,
                 buttons.left, buttons.right, buttons.up, buttons.down,
                 buttons.rotate_left, buttons.rotate_right, buttons.start, buttons.select);
+}
+
+void draw_player_state(const char* label, const SinglePlayer& game) {
+    ImGui::SeparatorText(label);
+    ImGui::Text("State: %s", state_name(game.state()));
+    ImGui::Text("Level %d  Lines %d  Score %u", game.level(), game.lines(), game.score());
+    ImGui::Text("Piece %d:%d  Origin (%d, %d)", static_cast<int>(game.piece().kind),
+                static_cast<int>(game.piece().rotation), game.piece().origin.x,
+                game.piece().origin.y);
+    ImGui::Text("Preview %d:%d  Hidden %d:%d  Visible: %s",
+                static_cast<int>(game.preview().kind),
+                static_cast<int>(game.preview().rotation),
+                static_cast<int>(game.hidden_piece().kind),
+                static_cast<int>(game.hidden_piece().rotation),
+                game.preview_visible() ? "yes" : "no");
+}
+
+void draw_events(const char* label, const SinglePlayer& game) {
+    if (game.events().empty())
+        return;
+    ImGui::SeparatorText(label);
+    for (const Event event : game.events())
+        ImGui::BulletText("%s, value %d", event_name(event.type), event.value);
 }
 
 bool draw_settings(presentation::Settings& settings) {
@@ -186,18 +223,14 @@ bool draw_debug_ui(DebugUi& ui, const GameFlow& flow,
             ImGui::SameLine();
             if (ImGui::Button("Step"))
                 ui.step = true;
-            const SinglePlayer& game = flow.game();
             ImGui::SeparatorText("Session");
             ImGui::Text("Screen: %s", screen_name(flow.screen()));
-            ImGui::Text("State: %s", state_name(game.state()));
-            ImGui::Text("Level %d  Lines %d  Score %u", game.level(), game.lines(), game.score());
-            ImGui::Text("Piece %d  Rotation %d  Origin (%d, %d)",
-                        static_cast<int>(game.piece().kind), static_cast<int>(game.piece().rotation),
-                        game.piece().origin.x, game.piece().origin.y);
-            ImGui::Text("Preview: %d:%d  Visible: %s",
-                        static_cast<int>(game.preview().kind),
-                        static_cast<int>(game.preview().rotation),
-                        game.preview_visible() ? "yes" : "no");
+            if (versus_session(flow.screen())) {
+                draw_player_state("Player one", flow.versus().player(0));
+                draw_player_state("Player two", flow.versus().player(1));
+            } else {
+                draw_player_state("Player", flow.game());
+            }
         }
         ImGui::End();
     }
@@ -233,8 +266,12 @@ bool draw_debug_ui(DebugUi& ui, const GameFlow& flow,
 
     if (ui.events_window) {
         if (ImGui::Begin("Game Events", &ui.events_window)) {
-            for (const Event event : flow.game().events())
-                ImGui::BulletText("event %d, value %d", static_cast<int>(event.type), event.value);
+            if (versus_session(flow.screen())) {
+                draw_events("Player one", flow.versus().player(0));
+                draw_events("Player two", flow.versus().player(1));
+            } else {
+                draw_events("Player", flow.game());
+            }
         }
         ImGui::End();
     }
@@ -313,17 +350,26 @@ bool draw_debug_ui(DebugUi& ui, const GameFlow& flow,
     if (ui.randomizer_window) {
         const bool open = ImGui::Begin("Piece Randomizer", &ui.randomizer_window);
         if (open) {
-            const SinglePlayer& game = flow.game();
+            const SinglePlayer& game = versus_session(flow.screen())
+                                           ? flow.versus().player(0)
+                                           : flow.game();
             ImGui::Text("Host divider state: %u", static_cast<unsigned int>(host.divider));
-            ImGui::Text("Last samples: %u, %u, %u",
+            ImGui::Text("Current host samples: %u, %u, %u",
                         static_cast<unsigned int>(host.random[0]),
                         static_cast<unsigned int>(host.random[1]),
                         static_cast<unsigned int>(host.random[2]));
-            ImGui::Text("Active: %d:%d  Preview: %d:%d",
+            const RandomSamples accepted = game.last_random_samples();
+            ImGui::Text("Last accepted samples: %u, %u, %u  Attempts: %d",
+                        static_cast<unsigned int>(accepted[0]),
+                        static_cast<unsigned int>(accepted[1]),
+                        static_cast<unsigned int>(accepted[2]), game.last_random_attempts());
+            ImGui::Text("Active %d:%d  Preview %d:%d  Hidden %d:%d",
                         static_cast<int>(game.piece().kind),
                         static_cast<int>(game.piece().rotation),
                         static_cast<int>(game.preview().kind),
-                        static_cast<int>(game.preview().rotation));
+                        static_cast<int>(game.preview().rotation),
+                        static_cast<int>(game.hidden_piece().kind),
+                        static_cast<int>(game.hidden_piece().rotation));
             ImGui::Text("Fixed sequence consumed: %zu", game.fixed_pieces_consumed());
         }
         ImGui::End();
@@ -334,6 +380,21 @@ bool draw_debug_ui(DebugUi& ui, const GameFlow& flow,
         if (open) {
             draw_buttons("Player one", host.player_one);
             draw_buttons("Player two", host.player_two);
+            const SinglePlayer& one = versus_session(flow.screen())
+                                          ? flow.versus().player(0)
+                                          : flow.game();
+            draw_buttons("Simulation held", one.held_buttons());
+            draw_buttons("Simulation pressed", one.pressed_buttons());
+            ImGui::Text("P1 DAS timer: %d  Drop timer: %d / %d",
+                        one.horizontal_repeat_timer(), one.drop_timer(), one.gravity_frames());
+            if (versus_session(flow.screen())) {
+                const SinglePlayer& two = flow.versus().player(1);
+                draw_buttons("P2 simulation held", two.held_buttons());
+                draw_buttons("P2 simulation pressed", two.pressed_buttons());
+                ImGui::Text("P2 DAS timer: %d  Drop timer: %d / %d",
+                            two.horizontal_repeat_timer(), two.drop_timer(),
+                            two.gravity_frames());
+            }
             ImGui::Text("Connected gamepads: %d", host.connected_gamepads);
             ImGui::TextUnformatted("ImGui gamepad navigation: disabled");
             if (ImGui::Button("Open persistent bindings"))
@@ -346,11 +407,26 @@ bool draw_debug_ui(DebugUi& ui, const GameFlow& flow,
         const bool open = ImGui::Begin("Display and Performance", &ui.display_window);
         if (open) {
             ImGui::Text("Render target: %d x %d", host.render_width, host.render_height);
+            ImGui::Text("Window mode: %s", host.fullscreen ? "borderless fullscreen" : "windowed");
+            if (ImGui::Button("640 x 576"))
+                ui.display_request = DisplayRequest::window_640;
+            ImGui::SameLine();
+            if (ImGui::Button("1280 x 720"))
+                ui.display_request = DisplayRequest::window_1280;
+            ImGui::SameLine();
+            if (ImGui::Button("1920 x 1080"))
+                ui.display_request = DisplayRequest::window_1920;
+            if (ImGui::Button(host.fullscreen ? "Return to window" : "Borderless fullscreen"))
+                ui.display_request = DisplayRequest::toggle_fullscreen;
+            ImGui::SameLine();
+            ImGui::TextDisabled("F11");
             ImGui::Text("Frame: %.3f ms", host.frame_seconds * 1'000.0);
             ImGui::Text("Fixed-tick accumulator: %.3f ms",
                         host.accumulator_seconds * 1'000.0);
-            ImGui::Text("Simulation tick: %llu",
-                        static_cast<unsigned long long>(flow.game().tick_count()));
+            const std::uint64_t tick = versus_session(flow.screen())
+                                           ? flow.versus().player(0).tick_count()
+                                           : flow.game().tick_count();
+            ImGui::Text("Simulation tick: %llu", static_cast<unsigned long long>(tick));
             ImGui::Text("Layout: %s", presentation::name(settings.layout));
             ImGui::Text("Effects: %s", presentation::name(settings.effects));
             ImGui::TextUnformatted("Simulation: 59.7275 Hz; rendering is independent.");

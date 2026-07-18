@@ -226,6 +226,10 @@ void test_flow_compositions(SDL_Renderer* renderer, SDL_Window* window,
     draw(renderer, window, target, video, content, game, settings);
     expect(checksum(renderer) != empty_score, "Type-A HUD renders live score digits");
     const std::uint64_t active = checksum(renderer);
+    draw(renderer, window, target, video, content, game, settings, {},
+         {.board_cells = true});
+    expect(checksum(renderer) != active,
+           "semantic board-cell and active-piece collision overlays are visible");
     game.edit_game().set_paused(true);
     draw(renderer, window, target, video, content, game, settings);
     expect(checksum(renderer) != active, "pause map visibly overlays gameplay");
@@ -245,6 +249,53 @@ void test_flow_compositions(SDL_Renderer* renderer, SDL_Window* window,
     draw(renderer, window, target, video, content, game, settings);
     expect(checksum(renderer) != 0, "rocket composition renders to a readable target");
 
+    SDL_DestroyTexture(target.texture);
+}
+
+void finish_versus_round(tetris::GameFlow& flow, int winner) {
+    flow.edit_versus().edit_player(winner).set_state_for_test(tetris::PlayState::complete);
+    flow.tick(input());
+    tick(flow, 40);
+}
+
+void continue_versus(tetris::GameFlow& flow) {
+    press(flow, {.start = true});
+    press(flow, {.rotate_right = true});
+}
+
+void test_versus_results(SDL_Renderer* renderer, SDL_Window* window,
+                         const tetris::presentation::Renderer& video,
+                         const tetris::content::Catalog& content) {
+    using namespace tetris;
+    GameFlow flow;
+    flow.start({content.type_a_demo.runs, content.type_b_demo.runs,
+                content.demo_pieces, content.type_b_demo_garbage.bytes});
+    tick(flow, 250);
+    press(flow, {.rotate_right = true});
+    press(flow, {.start = true});
+    press(flow, {.right = true});
+    press(flow, {.right = true});
+    press(flow, {.start = true});
+    press(flow, {.rotate_right = true});
+
+    Target target = make_target(renderer, 1280, 720);
+    finish_versus_round(flow, 0);
+    expect(flow.screen() == Screen::versus_round_result,
+           "render fixture reaches a round result");
+    draw(renderer, window, target, video, content, flow,
+         tetris::presentation::original_settings());
+    const std::uint64_t round_result = checksum(renderer);
+
+    for (int round = 1; round < 4; ++round) {
+        continue_versus(flow);
+        finish_versus_round(flow, 0);
+    }
+    expect(flow.screen() == Screen::versus_match_result,
+           "fourth win reaches the original match result");
+    draw(renderer, window, target, video, content, flow,
+         tetris::presentation::original_settings());
+    expect(checksum(renderer) != round_result,
+           "final Mario win composition differs from an ordinary round result");
     SDL_DestroyTexture(target.texture);
 }
 
@@ -305,6 +356,7 @@ int main() {
         test_scaling_and_widescreen(renderer, window, video, content);
         test_flow_compositions(renderer, window, video, content);
         test_versus_fit(renderer, window, video, content);
+        test_versus_results(renderer, window, video, content);
     }
 
     video.shutdown();

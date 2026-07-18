@@ -20,6 +20,8 @@ struct EffectState {
 struct Offset { float x{}; float y{}; };
 
 void advance(EffectState& state, std::span<const Event> events, const Settings& settings);
+void advance(EffectState& state, std::span<const Event> first,
+             std::span<const Event> second, const Settings& settings);
 Offset shake_offset(const EffectState& state, const Settings& settings);
 float background_pulse(const EffectState& state, const Settings& settings);
 

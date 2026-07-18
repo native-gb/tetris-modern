@@ -167,7 +167,14 @@ void step(State& state, Buttons one, Buttons two) {
         state.flow.tick(input);
         state.replay.append(std::move(input), state.divider);
     }
-    presentation::advance(state.effects, state.flow.game().events(), state.settings);
+    if (state.flow.screen() == Screen::versus_gameplay ||
+        state.flow.screen() == Screen::versus_round_result ||
+        state.flow.screen() == Screen::versus_match_result) {
+        presentation::advance(state.effects, state.flow.versus().player(0).events(),
+                              state.flow.versus().player(1).events(), state.settings);
+    } else {
+        presentation::advance(state.effects, state.flow.game().events(), state.settings);
+    }
     state.audio.tick(state.flow, state.divider);
 }
 
@@ -178,6 +185,24 @@ bool place_window(SDL_Window* window) {
     (void)SDL_SetWindowSize(window, 640, 576);
     (void)SDL_SetWindowPosition(window, SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED);
     return SDL_SyncWindow(window);
+}
+
+void apply_display_request(SDL_Window* window, DisplayRequest request) {
+    if (window == nullptr || request == DisplayRequest::none)
+        return;
+    if (request == DisplayRequest::toggle_fullscreen) {
+        const bool fullscreen = (SDL_GetWindowFlags(window) & SDL_WINDOW_FULLSCREEN) != 0;
+        (void)SDL_SetWindowFullscreen(window, !fullscreen);
+        return;
+    }
+    (void)SDL_SetWindowFullscreen(window, false);
+    if (request == DisplayRequest::window_640)
+        (void)SDL_SetWindowSize(window, 640, 576);
+    else if (request == DisplayRequest::window_1280)
+        (void)SDL_SetWindowSize(window, 1280, 720);
+    else if (request == DisplayRequest::window_1920)
+        (void)SDL_SetWindowSize(window, 1920, 1080);
+    (void)SDL_SetWindowPosition(window, SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED);
 }
 
 } // namespace
@@ -334,12 +359,15 @@ int run(const content::Rom& rom, const content::Catalog& content, int frame_limi
             .render_width = frame.render_width,
             .render_height = frame.render_height,
             .connected_gamepads = gamepad_count,
+            .fullscreen = (SDL_GetWindowFlags(frame.window) & SDL_WINDOW_FULLSCREEN) != 0,
         };
         if (draw_debug_ui(state.debug, state.flow, state.settings, content, state.audio, host)) {
             state.flow.set_line_clear_speed(state.settings.line_clear_speed);
             state.audio.set_volume(state.settings.music_volume, state.settings.effects_volume);
             (void)presentation::save_settings(settings_path, state.settings, settings_error);
         }
+        apply_display_request(frame.window, state.debug.display_request);
+        state.debug.display_request = DisplayRequest::none;
         if (!gubsy_draw_frame_to_window(runtime))
             running = false;
         imgui_render_layer();

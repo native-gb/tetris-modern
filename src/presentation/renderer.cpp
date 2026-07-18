@@ -291,7 +291,8 @@ std::uint8_t tile_for(Block block) {
 void draw_session(SDL_Renderer* renderer, const Renderer& video,
                   const content::Catalog& content, Bank bank,
                   const SinglePlayer& game, const Placement& placement,
-                  bool active, const Settings& settings, bool bounds) {
+                  bool active, const Settings& settings, bool sprite_bounds,
+                  bool board_cells) {
     for (int row = 0; row < board_height; ++row) {
         const bool clearing = std::ranges::find(game.clearing_rows(), row) != game.clearing_rows().end();
         for (int column = 0; column < board_width; ++column) {
@@ -308,6 +309,13 @@ void draw_session(SDL_Renderer* renderer, const Renderer& video,
             if (tile != 0)
                 draw_tile(renderer, video, bank, tile,
                           placement, static_cast<float>(column + 2), static_cast<float>(row));
+            if (board_cells && block != Block::empty) {
+                SDL_SetRenderDrawColor(renderer, 255, 196, 64, 220);
+                const SDL_FRect rect{placement.x + static_cast<float>(column + 2) * placement.tile,
+                                     placement.y + static_cast<float>(row) * placement.tile,
+                                     placement.tile, placement.tile};
+                (void)SDL_RenderRect(renderer, &rect);
+            }
         }
     }
     const content::ByteTable* active_placement = content.find_presentation("active-piece-placement");
@@ -316,13 +324,22 @@ void draw_session(SDL_Renderer* renderer, const Renderer& video,
         const auto raw_x = static_cast<std::uint8_t>(active_placement->bytes[2] + (piece.origin.x - 3) * 8);
         const auto raw_y = static_cast<std::uint8_t>(active_placement->bytes[1] + (piece.origin.y + 1) * 8);
         draw_sprite(renderer, video, content, bank, piece_id(piece), placement,
-                    raw_x, raw_y, false, bounds);
+                    raw_x, raw_y, false, sprite_bounds);
+        if (board_cells) {
+            SDL_SetRenderDrawColor(renderer, 72, 224, 255, 230);
+            for (const Cell cell : occupied_cells(piece)) {
+                const SDL_FRect rect{placement.x + static_cast<float>(cell.x + 2) * placement.tile,
+                                     placement.y + static_cast<float>(cell.y) * placement.tile,
+                                     placement.tile, placement.tile};
+                (void)SDL_RenderRect(renderer, &rect);
+            }
+        }
     }
     if (game.preview_visible()) {
         const content::ByteTable* preview = content.find_presentation("preview-piece-placement");
         if (preview != nullptr)
             draw_sprite(renderer, video, content, bank, piece_id(game.preview()), placement,
-                        preview->bytes[2], preview->bytes[1], false, bounds);
+                        preview->bytes[2], preview->bytes[1], false, sprite_bounds);
     }
     if (game.rules().type == GameType::type_a) {
         number(renderer, video, bank, placement, game.score(), 18, 3, 6);
@@ -412,12 +429,90 @@ void draw_background(SDL_Renderer* renderer, const GubsyFrame& frame,
 
 using namespace drawing;
 
+namespace {
+
+constexpr int scene_width = 160;
+constexpr int scene_height = 144;
+constexpr Placement scene_placement{0, 0, 8};
+
+SDL_Texture* make_scene(SDL_Renderer* renderer) {
+    SDL_Texture* scene = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA8888,
+                                           SDL_TEXTUREACCESS_TARGET,
+                                           scene_width, scene_height);
+    if (scene != nullptr) {
+        (void)SDL_SetTextureScaleMode(scene, SDL_SCALEMODE_NEAREST);
+        (void)SDL_SetTextureBlendMode(scene, SDL_BLENDMODE_NONE);
+    }
+    return scene;
+}
+
+void begin_scene(SDL_Renderer* renderer, SDL_Texture* scene) {
+    (void)SDL_SetRenderTarget(renderer, scene);
+    SDL_SetRenderDrawColor(renderer, palette[0].r, palette[0].g, palette[0].b, 255);
+    (void)SDL_RenderClear(renderer);
+}
+
+void compose_scene(SDL_Renderer* renderer, SDL_Texture* host, SDL_Texture* scene,
+                   const Placement& placement) {
+    (void)SDL_SetRenderTarget(renderer, host);
+    const SDL_FRect destination{placement.x, placement.y,
+                                20.0F * placement.tile, 18.0F * placement.tile};
+    (void)SDL_RenderTexture(renderer, scene, nullptr, &destination);
+}
+
+void render_single_scene(SDL_Renderer* renderer, const Renderer& video,
+                         const content::Catalog& content, const GameFlow& flow,
+                         const Settings& settings, DebugView debug) {
+    const Placement& placement = scene_placement;
+    if (flow.screen() == Screen::buran || flow.screen() == Screen::rocket) {
+        draw_launch(renderer, video, content, flow, placement);
+    } else if (flow.screen() == Screen::versus_round_result ||
+               flow.screen() == Screen::versus_match_result) {
+        draw_versus_result(renderer, video, content, flow, placement);
+    } else {
+        Bank bank = Bank::gameplay;
+        const char* map_id = map_for(flow, bank);
+        if (map_id != nullptr) {
+            if (const content::Tilemap* map = content.find_tilemap(map_id))
+                draw_map(renderer, video, bank, *map, placement);
+        }
+
+        if (flow.screen() == Screen::gameplay || flow.screen() == Screen::demo) {
+            draw_session(renderer, video, content, bank, flow.game(), placement,
+                         true, settings, debug.sprite_bounds, debug.board_cells);
+        }
+        if (flow.screen() == Screen::game_over) {
+            draw_game_over(renderer, video, content, flow, bank, placement,
+                           settings, debug.sprite_bounds);
+        }
+        if ((flow.screen() == Screen::gameplay || flow.screen() == Screen::demo) &&
+            flow.game().paused()) {
+            if (const content::Tilemap* pause = content.find_tilemap("pause-message"))
+                draw_map(renderer, video, bank, *pause, placement, 3, 3);
+        }
+        draw_type_b_result(renderer, video, content, flow, placement);
+        draw_flow_ui(renderer, video, content, flow, placement);
+    }
+    if (debug.grid)
+        draw_grid(renderer, placement);
+}
+
+} // namespace
+
 bool Renderer::initialize(SDL_Renderer* renderer, const content::Catalog& content) {
     shutdown();
-    return build_atlas(renderer, content.gameplay_tiles, gameplay_) &&
-           build_atlas(renderer, content.font_tiles, font_, true) &&
-           build_atlas(renderer, content.title_tiles, title_) &&
-           build_atlas(renderer, content.multiplayer_tiles, multiplayer_);
+    const bool ready = build_atlas(renderer, content.gameplay_tiles, gameplay_) &&
+                       build_atlas(renderer, content.font_tiles, font_, true) &&
+                       build_atlas(renderer, content.title_tiles, title_) &&
+                       build_atlas(renderer, content.multiplayer_tiles, multiplayer_);
+    if (ready) {
+        scenes_[0] = make_scene(renderer);
+        scenes_[1] = make_scene(renderer);
+    }
+    if (ready && scenes_[0] != nullptr && scenes_[1] != nullptr)
+        return true;
+    shutdown();
+    return false;
 }
 
 void Renderer::shutdown() {
@@ -425,6 +520,10 @@ void Renderer::shutdown() {
     SDL_DestroyTexture(font_.opaque); SDL_DestroyTexture(font_.sprites);
     SDL_DestroyTexture(title_.opaque); SDL_DestroyTexture(title_.sprites);
     SDL_DestroyTexture(multiplayer_.opaque); SDL_DestroyTexture(multiplayer_.sprites);
+    for (SDL_Texture*& scene : scenes_) {
+        SDL_DestroyTexture(scene);
+        scene = nullptr;
+    }
     gameplay_ = {}; font_ = {}; title_ = {}; multiplayer_ = {};
 }
 
@@ -434,59 +533,30 @@ void Renderer::draw(SDL_Renderer* renderer, const GubsyFrame& frame,
                     DebugView debug) const {
     (void)SDL_SetRenderTarget(renderer, frame.render_target);
     draw_background(renderer, frame, settings, background_pulse(effects, settings));
-    const Placement placement = centered(frame, shake_offset(effects, settings));
-    if (flow.screen() == Screen::buran || flow.screen() == Screen::rocket) {
-        draw_launch(renderer, *this, content, flow, placement);
-        if (debug.grid)
-            draw_grid(renderer, placement);
-        return;
-    }
-    if (flow.screen() == Screen::versus_round_result ||
-        flow.screen() == Screen::versus_match_result) {
-        draw_versus_result(renderer, *this, content, flow, placement);
-        if (debug.grid)
-            draw_grid(renderer, placement);
-        return;
-    }
     if (flow.screen() == Screen::versus_gameplay) {
         const auto placements = versus_placements(frame, shake_offset(effects, settings));
-        const Placement first = placements[0];
-        const Placement second = placements[1];
-        if (const content::Tilemap* map = content.find_tilemap("multiplayer-gameplay")) {
-            draw_map(renderer, *this, Bank::multiplayer, *map, first);
-            draw_map(renderer, *this, Bank::multiplayer, *map, second);
+        for (int player = 0; player < 2; ++player) {
+            begin_scene(renderer, scenes_[static_cast<std::size_t>(player)]);
+            if (const content::Tilemap* map = content.find_tilemap("multiplayer-gameplay"))
+                draw_map(renderer, *this, Bank::multiplayer, *map, scene_placement);
+            draw_session(renderer, *this, content, Bank::multiplayer,
+                         flow.versus().player(player), scene_placement, true,
+                         settings, debug.sprite_bounds, debug.board_cells);
+            draw_versus_status(renderer, *this, content, flow.versus(),
+                               scene_placement, player);
+            if (debug.grid)
+                draw_grid(renderer, scene_placement);
+            compose_scene(renderer, frame.render_target,
+                          scenes_[static_cast<std::size_t>(player)],
+                          placements[static_cast<std::size_t>(player)]);
         }
-        draw_session(renderer, *this, content, Bank::multiplayer, flow.versus().player(0),
-                     first, true, settings, debug.sprite_bounds);
-        draw_session(renderer, *this, content, Bank::multiplayer, flow.versus().player(1),
-                     second, true, settings, debug.sprite_bounds);
-        draw_versus_status(renderer, *this, content, flow.versus(), first, second);
-        if (debug.grid) { draw_grid(renderer, first); draw_grid(renderer, second); }
         return;
     }
 
-    Bank bank = Bank::gameplay;
-    const char* map_id = map_for(flow, bank);
-    if (map_id != nullptr) {
-        if (const content::Tilemap* map = content.find_tilemap(map_id))
-            draw_map(renderer, *this, bank, *map, placement);
-    }
-
-    if (flow.screen() == Screen::gameplay || flow.screen() == Screen::demo) {
-        draw_session(renderer, *this, content, bank, flow.game(), placement,
-                     true, settings, debug.sprite_bounds);
-    }
-    if (flow.screen() == Screen::game_over)
-        draw_game_over(renderer, *this, content, flow, bank, placement,
-                       settings, debug.sprite_bounds);
-    if ((flow.screen() == Screen::gameplay || flow.screen() == Screen::demo) && flow.game().paused()) {
-        if (const content::Tilemap* pause = content.find_tilemap("pause-message"))
-            draw_map(renderer, *this, bank, *pause, placement, 3, 3);
-    }
-    draw_type_b_result(renderer, *this, content, flow, placement);
-    draw_flow_ui(renderer, *this, content, flow, placement);
-    if (debug.grid)
-        draw_grid(renderer, placement);
+    begin_scene(renderer, scenes_[0]);
+    render_single_scene(renderer, *this, content, flow, settings, debug);
+    compose_scene(renderer, frame.render_target, scenes_[0],
+                  centered(frame, shake_offset(effects, settings)));
 }
 
 } // namespace tetris::presentation

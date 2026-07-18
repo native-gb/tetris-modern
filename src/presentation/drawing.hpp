@@ -41,7 +41,8 @@ void text(SDL_Renderer* renderer, const Renderer& video, Bank bank,
 void draw_session(SDL_Renderer* renderer, const Renderer& video,
                   const content::Catalog& content, Bank bank,
                   const SinglePlayer& game, const Placement& placement,
-                  bool active, const Settings& settings, bool bounds);
+                  bool active, const Settings& settings, bool sprite_bounds,
+                  bool board_cells);
 void draw_grid(SDL_Renderer* renderer, const Placement& placement);
 void draw_background(SDL_Renderer* renderer, const GubsyFrame& frame,
                      const Settings& settings, float pulse);

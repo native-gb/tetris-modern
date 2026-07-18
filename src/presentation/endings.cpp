@@ -110,11 +110,12 @@ void result_text(SDL_Renderer* renderer, const Renderer& video,
     const content::ByteTable* value = table(content, id);
     if (value == nullptr)
         return;
+    const int column = (21 - static_cast<int>(value->bytes.size())) / 2;
     for (std::size_t index = 0; index < value->bytes.size(); ++index) {
         drawing::draw_tile(renderer, video, Bank::multiplayer, value->bytes[index], placement,
-                           static_cast<float>(5 + index), 5);
+                           static_cast<float>(column + static_cast<int>(index)), 5);
         drawing::draw_tile(renderer, video, Bank::multiplayer, 0xB6, placement,
-                           static_cast<float>(5 + index), 6);
+                           static_cast<float>(column + static_cast<int>(index)), 6);
     }
 }
 
@@ -164,7 +165,7 @@ void draw_game_over(SDL_Renderer* renderer, const Renderer& video,
                     const Settings& settings, bool sprite_bounds) {
     if (flow.ending_stage() == EndingStage::game_over_curtain) {
         drawing::draw_session(renderer, video, content, bank, flow.game(), placement,
-                              false, settings, sprite_bounds);
+                              false, settings, sprite_bounds, false);
         for (int row = board_height - flow.game_over_curtain_rows(); row < board_height; ++row) {
             for (int column = 0; column < board_width; ++column)
                 drawing::draw_tile(renderer, video, bank, 0x87, placement,

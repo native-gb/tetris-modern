@@ -142,24 +142,20 @@ void draw_flow_ui(SDL_Renderer* renderer, const Renderer& video,
 
 void draw_versus_status(SDL_Renderer* renderer, const Renderer& video,
                         const content::Catalog& content, const VersusMatch& match,
-                        const Placement& first, const Placement& second) {
-    for (int row = 0; row < match.stack_height(1); ++row)
-        drawing::draw_tile(renderer, video, Bank::multiplayer, 0xB6, first, 1,
+                        const Placement& placement, int player) {
+    const int opponent = 1 - player;
+    for (int row = 0; row < match.stack_height(opponent); ++row)
+        drawing::draw_tile(renderer, video, Bank::multiplayer, 0xB6, placement, 1,
                            static_cast<float>(17 - row));
-    for (int row = 0; row < match.stack_height(0); ++row)
-        drawing::draw_tile(renderer, video, Bank::multiplayer, 0xB6, second, 1,
-                           static_cast<float>(17 - row));
-    draw_oam(renderer, video, content, first, "luigi-gameplay-face");
-    draw_oam(renderer, video, content, second, "mario-gameplay-face");
+    draw_oam(renderer, video, content, placement,
+             player == 0 ? "luigi-gameplay-face" : "mario-gameplay-face");
     if (!match.paused())
         return;
     const content::ByteTable* pause = content.find_presentation("multiplayer-pause-text");
     if (pause == nullptr)
         return;
     for (std::size_t index = 0; index < pause->bytes.size(); ++index) {
-        drawing::draw_tile(renderer, video, Bank::multiplayer, pause->bytes[index], first,
-                           static_cast<float>(14 + index), 7);
-        drawing::draw_tile(renderer, video, Bank::multiplayer, pause->bytes[index], second,
+        drawing::draw_tile(renderer, video, Bank::multiplayer, pause->bytes[index], placement,
                            static_cast<float>(14 + index), 7);
     }
 }

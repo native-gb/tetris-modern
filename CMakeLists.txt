@@ -15,6 +15,10 @@ option(TETRIS_WARN_AS_ERROR "Treat warnings as errors" ON)
 option(TETRIS_SANITIZERS "Enable address and undefined behavior sanitizers" OFF)
 option(TETRIS_BUILD_APP "Build the SDL3 desktop application" ON)
 set(TETRIS_TEST_ROM "" CACHE FILEPATH "Optional supported ROM used by extraction tests")
+set(TETRIS_DEFAULT_ROM "${CMAKE_CURRENT_SOURCE_DIR}/roms/Tetris (JUE) (V1.1) [!].gb")
+if(NOT TETRIS_TEST_ROM AND EXISTS "${TETRIS_DEFAULT_ROM}")
+    set(TETRIS_TEST_ROM "${TETRIS_DEFAULT_ROM}")
+endif()
 
 function(tetris_target_defaults target)
     target_compile_features(${target} PUBLIC cxx_std_20)
@@ -95,7 +99,11 @@ if(TETRIS_BUILD_APP)
     if(EXISTS "${TETRIS_GB_AUDIO_DIR}/CMakeLists.txt")
         add_subdirectory("${TETRIS_GB_AUDIO_DIR}" gb-audio)
     else()
-        message(FATAL_ERROR "gb-audio is required; set TETRIS_GB_AUDIO_DIR to its source tree")
+        FetchContent_Declare(gb_audio
+            GIT_REPOSITORY https://github.com/native-gb/gb-audio.git
+            GIT_TAG 13778d0e1e65df53eb6ede780948e86c1c4a84df)
+        FetchContent_MakeAvailable(gb_audio)
+        set(TETRIS_GB_AUDIO_DIR "${gb_audio_SOURCE_DIR}")
     endif()
 
     add_library(tetris-rendering STATIC

@@ -45,6 +45,7 @@ void SinglePlayer::start(GameRules rules, const StartupRandom& random,
     hidden_ = {};
     state_ = PlayState::falling;
     previous_buttons_ = initial_buttons;
+    pressed_buttons_ = {};
     paused_ = false;
     preview_visible_ = true;
     require_fresh_down_press_ = false;
@@ -62,6 +63,8 @@ void SinglePlayer::start(GameRules rules, const StartupRandom& random,
     line_animation_step_ = 0;
     wipe_step_ = 0;
     locks_at_spawn_ = 0;
+    last_random_samples_ = {};
+    last_random_attempts_ = 0;
     score_clear_when_wiping_ = false;
     clearing_rows_.clear();
     fixed_pieces_.assign(fixed_pieces.begin(), fixed_pieces.end());
@@ -102,6 +105,7 @@ void SinglePlayer::start(GameRules rules, const StartupRandom& random,
 void SinglePlayer::tick(const TickInput& input) {
     events_.clear();
     const Buttons pressed = newly_pressed(input.buttons, previous_buttons_);
+    pressed_buttons_ = pressed;
     previous_buttons_ = input.buttons;
     ++tick_count_;
 
@@ -378,6 +382,8 @@ void SinglePlayer::spawn(const RandomSamples& random) {
         active = queue.active;
         preview_ = queue.preview;
         hidden_ = queue.hidden;
+        last_random_samples_ = random;
+        last_random_attempts_ = queue.attempts;
     }
     piece_ = spawn_piece(active);
     fall_timer_ = gravity_frames_;
@@ -415,6 +421,7 @@ const Board& SinglePlayer::presentation_board() const {
 Board& SinglePlayer::edit_board() { return board_; }
 const FallingPiece& SinglePlayer::piece() const { return piece_; }
 PieceSpec SinglePlayer::preview() const { return preview_; }
+PieceSpec SinglePlayer::hidden_piece() const { return hidden_; }
 PlayState SinglePlayer::state() const { return state_; }
 GameRules SinglePlayer::rules() const { return rules_; }
 int SinglePlayer::level() const { return level_; }
@@ -434,6 +441,10 @@ std::uint64_t SinglePlayer::tick_count() const { return tick_count_; }
 int SinglePlayer::gravity_frames() const { return gravity_frames_; }
 int SinglePlayer::drop_timer() const { return fall_timer_; }
 int SinglePlayer::horizontal_repeat_timer() const { return horizontal_repeat_timer_; }
+Buttons SinglePlayer::held_buttons() const { return previous_buttons_; }
+Buttons SinglePlayer::pressed_buttons() const { return pressed_buttons_; }
+RandomSamples SinglePlayer::last_random_samples() const { return last_random_samples_; }
+int SinglePlayer::last_random_attempts() const { return last_random_attempts_; }
 std::size_t SinglePlayer::fixed_pieces_consumed() const { return next_fixed_piece_; }
 int SinglePlayer::locks_at_spawn() const { return locks_at_spawn_; }
 void SinglePlayer::place_piece_for_test(FallingPiece piece) { piece_ = piece; state_ = PlayState::falling; }

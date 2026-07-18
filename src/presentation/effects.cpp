@@ -24,17 +24,7 @@ void shake(EffectState& state, float strength, int duration) {
     ++state.sequence;
 }
 
-} // namespace
-
-void advance(EffectState& state, std::span<const Event> events, const Settings& settings) {
-    if (state.shake_ticks > 0)
-        --state.shake_ticks;
-    if (state.pulse_ticks > 0)
-        --state.pulse_ticks;
-    if (settings.effects == Intensity::off) {
-        state = {};
-        return;
-    }
+void react(EffectState& state, std::span<const Event> events, const Settings& settings) {
     const bool full = settings.effects == Intensity::full;
     for (const Event event : events) {
         if (event.type == GameEvent::landed && !settings.reduced_motion)
@@ -49,6 +39,26 @@ void advance(EffectState& state, std::span<const Event> events, const Settings& 
             state.pulse_duration = state.pulse_ticks;
         }
     }
+}
+
+} // namespace
+
+void advance(EffectState& state, std::span<const Event> events, const Settings& settings) {
+    advance(state, events, {}, settings);
+}
+
+void advance(EffectState& state, std::span<const Event> first,
+             std::span<const Event> second, const Settings& settings) {
+    if (state.shake_ticks > 0)
+        --state.shake_ticks;
+    if (state.pulse_ticks > 0)
+        --state.pulse_ticks;
+    if (settings.effects == Intensity::off) {
+        state = {};
+        return;
+    }
+    react(state, first, settings);
+    react(state, second, settings);
 }
 
 Offset shake_offset(const EffectState& state, const Settings& settings) {

@@ -95,6 +95,7 @@ public:
     Board& edit_board();
     const FallingPiece& piece() const;
     PieceSpec preview() const;
+    PieceSpec hidden_piece() const;
     PlayState state() const;
     GameRules rules() const;
     int level() const;
@@ -112,6 +113,10 @@ public:
     int gravity_frames() const;
     int drop_timer() const;
     int horizontal_repeat_timer() const;
+    Buttons held_buttons() const;
+    Buttons pressed_buttons() const;
+    RandomSamples last_random_samples() const;
+    int last_random_attempts() const;
     std::size_t fixed_pieces_consumed() const;
     int locks_at_spawn() const;
 
@@ -145,6 +150,7 @@ private:
     PieceSpec hidden_{};
     PlayState state_{PlayState::game_over};
     Buttons previous_buttons_{};
+    Buttons pressed_buttons_{};
     bool paused_{};
     bool preview_visible_{true};
     bool require_fresh_down_press_{};
@@ -163,6 +169,8 @@ private:
     int wipe_step_{};
     std::uint64_t tick_count_{};
     int locks_at_spawn_{};
+    RandomSamples last_random_samples_{};
+    int last_random_attempts_{};
     bool score_clear_when_wiping_{};
     LineClearSpeed line_clear_speed_{LineClearSpeed::original};
     std::vector<int> clearing_rows_{};

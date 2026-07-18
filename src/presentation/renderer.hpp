@@ -8,6 +8,8 @@
 #include <SDL3/SDL.h>
 #include <gubsy/runtime.hpp>
 
+#include <array>
+
 namespace tetris::presentation {
 
 struct DebugView {
@@ -42,6 +44,7 @@ private:
     Atlas font_{};
     Atlas title_{};
     Atlas multiplayer_{};
+    std::array<SDL_Texture*, 2> scenes_{};
 };
 
 } // namespace tetris::presentation

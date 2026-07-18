@@ -12,6 +12,7 @@
 namespace tetris::app {
 
 enum class ReplayRequest { none, record, stop, play, clear };
+enum class DisplayRequest { none, window_640, window_1280, window_1920, toggle_fullscreen };
 enum class DebugCommandType {
     none,
     start_type_a,
@@ -41,6 +42,7 @@ struct HostDebug {
     int render_width{};
     int render_height{};
     int connected_gamepads{};
+    bool fullscreen{};
 };
 
 struct DebugUi {
@@ -61,6 +63,7 @@ struct DebugUi {
     bool paused{};
     bool step{};
     ReplayRequest replay_request{ReplayRequest::none};
+    DisplayRequest display_request{DisplayRequest::none};
     bool replay_recording{};
     bool replay_playing{};
     std::size_t replay_position{};

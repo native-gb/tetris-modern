@@ -11,7 +11,6 @@ void draw_flow_ui(SDL_Renderer* renderer, const Renderer& video,
                   const drawing::Placement& placement);
 void draw_versus_status(SDL_Renderer* renderer, const Renderer& video,
                         const content::Catalog& content, const VersusMatch& match,
-                        const drawing::Placement& first,
-                        const drawing::Placement& second);
+                        const drawing::Placement& placement, int player);
 
 } // namespace tetris::presentation

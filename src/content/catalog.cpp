@@ -305,11 +305,8 @@ const ByteTable* Catalog::find_presentation(std::string_view id) const {
 }
 
 bool extract_catalog(const Rom& rom, Catalog& result, std::string& error) {
-    if (!is_supported(rom)) {
-        error = "unsupported ROM: expected Tetris (JUE) v1.1 SHA-1 " +
-                std::string(supported_sha1) + ", received " + rom.digest;
+    if (!validate_supported(rom, error))
         return false;
-    }
 
     Catalog catalog;
     catalog.profile = "tetris-jue-v1.1";

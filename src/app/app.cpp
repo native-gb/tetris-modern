@@ -2,6 +2,7 @@
 
 #include "app/controls_menu.hpp"
 #include "app/debug_ui.hpp"
+#include "app/input.hpp"
 #include "app/persistence.hpp"
 #include "audio/output.hpp"
 #include "game/flow.hpp"
@@ -12,7 +13,6 @@
 #include "src/imgui_layer.hpp"
 
 #include <SDL3/SDL.h>
-#include <gubsy/input/binds_profile.hpp>
 #include <gubsy/runtime.hpp>
 #include <imgui.h>
 
@@ -28,13 +28,6 @@ namespace {
 
 constexpr double ticks_per_second = 59.7275;
 constexpr double fixed_step = 1.0 / ticks_per_second;
-constexpr int player_one_profile = 4101;
-constexpr int player_two_profile = 4102;
-
-enum class Action : int {
-    left = 1, right, up, down, rotate_left, rotate_right, start, select, quit,
-};
-
 struct State {
     GameFlow flow;
     presentation::Settings settings;
@@ -46,125 +39,6 @@ struct State {
     FlowInput last_input{};
     std::uint8_t divider{1};
 };
-
-bool down(GubsyRuntime& runtime, int player, Action action) {
-    return gubsy_lobby_player_action_down(runtime, player, static_cast<int>(action));
-}
-
-Buttons read_buttons(GubsyRuntime& runtime, int player) {
-    return {
-        .left = down(runtime, player, Action::left),
-        .right = down(runtime, player, Action::right),
-        .up = down(runtime, player, Action::up),
-        .down = down(runtime, player, Action::down),
-        .rotate_left = down(runtime, player, Action::rotate_left),
-        .rotate_right = down(runtime, player, Action::rotate_right),
-        .start = down(runtime, player, Action::start),
-        .select = down(runtime, player, Action::select),
-    };
-}
-
-void bind(BindsProfile& profile, GubsyButton button, Action action) {
-    bind_button(profile, button, static_cast<int>(action));
-}
-
-void bind_gamepad(BindsProfile& profile) {
-    bind(profile, GubsyButton::GP_DPAD_LEFT, Action::left);
-    bind(profile, GubsyButton::GP_DPAD_RIGHT, Action::right);
-    bind(profile, GubsyButton::GP_DPAD_UP, Action::up);
-    bind(profile, GubsyButton::GP_DPAD_DOWN, Action::down);
-    bind(profile, GubsyButton::GP_X, Action::rotate_left);
-    bind(profile, GubsyButton::GP_A, Action::rotate_right);
-    bind(profile, GubsyButton::GP_START, Action::start);
-    bind(profile, GubsyButton::GP_BACK, Action::select);
-}
-
-bool register_controls(GubsyRuntime& runtime) {
-    BindsSchema schema;
-    (void)schema.add_action(static_cast<int>(Action::left), "Left", "Game Boy");
-    (void)schema.add_action(static_cast<int>(Action::right), "Right", "Game Boy");
-    (void)schema.add_action(static_cast<int>(Action::up), "Up", "Game Boy");
-    (void)schema.add_action(static_cast<int>(Action::down), "Down", "Game Boy");
-    (void)schema.add_action(static_cast<int>(Action::rotate_left), "B / Rotate left", "Game Boy");
-    (void)schema.add_action(static_cast<int>(Action::rotate_right), "A / Rotate right", "Game Boy");
-    (void)schema.add_action(static_cast<int>(Action::start), "Start", "Game Boy");
-    (void)schema.add_action(static_cast<int>(Action::select), "Select", "Game Boy");
-    (void)schema.add_action(static_cast<int>(Action::quit), "Quit", "Application");
-    gubsy_register_binds_schema(runtime, schema);
-
-    BindsProfile one;
-    one.id = player_one_profile;
-    one.name = "TetrisPlayerOne";
-    bind(one, GubsyButton::KB_LEFT, Action::left); bind(one, GubsyButton::KB_A, Action::left);
-    bind(one, GubsyButton::KB_RIGHT, Action::right); bind(one, GubsyButton::KB_D, Action::right);
-    bind(one, GubsyButton::KB_UP, Action::up); bind(one, GubsyButton::KB_W, Action::up);
-    bind(one, GubsyButton::KB_DOWN, Action::down); bind(one, GubsyButton::KB_S, Action::down);
-    bind(one, GubsyButton::KB_Z, Action::rotate_left); bind(one, GubsyButton::KB_X, Action::rotate_right);
-    bind(one, GubsyButton::KB_ENTER, Action::start); bind(one, GubsyButton::KB_BACKSPACE, Action::select);
-    bind(one, GubsyButton::KB_ESCAPE, Action::quit); bind_gamepad(one);
-
-    BindsProfile two;
-    two.id = player_two_profile;
-    two.name = "TetrisPlayerTwo";
-    bind(two, GubsyButton::KB_J, Action::left); bind(two, GubsyButton::KB_L, Action::right);
-    bind(two, GubsyButton::KB_I, Action::up); bind(two, GubsyButton::KB_K, Action::down);
-    bind(two, GubsyButton::KB_U, Action::rotate_left); bind(two, GubsyButton::KB_O, Action::rotate_right);
-    bind(two, GubsyButton::KB_P, Action::start); bind(two, GubsyButton::KB_Y, Action::select);
-    bind_gamepad(two);
-
-    if (gubsy_find_binds_profile(runtime, one.id) == nullptr &&
-        !gubsy_replace_binds_profile(runtime, one))
-        return false;
-    if (gubsy_find_binds_profile(runtime, two.id) == nullptr &&
-        !gubsy_replace_binds_profile(runtime, two))
-        return false;
-    const int second = gubsy_add_lobby_local_player(runtime);
-    return second == 1 &&
-           gubsy_set_lobby_player_binds_profile(runtime, 0, one.id) &&
-           gubsy_set_lobby_player_binds_profile(runtime, 1, two.id);
-}
-
-bool has_gamepad(const GubsyLobbyPlayer& player) {
-    return std::any_of(player.devices.begin(), player.devices.end(),
-                       [](GubsyLobbyDeviceAssignment device) {
-                           return device.type == InputSourceType::Gamepad;
-                       });
-}
-
-bool assigned(const GubsyLobbyState& lobby, int device_id) {
-    for (const GubsyLobbyPlayer& player : lobby.local_players) {
-        const bool found = std::any_of(
-            player.devices.begin(), player.devices.end(),
-            [device_id](GubsyLobbyDeviceAssignment device) {
-                return device.type == InputSourceType::Gamepad && device.device_id == device_id;
-            });
-        if (found)
-            return true;
-    }
-    return false;
-}
-
-void assign_unclaimed_gamepads(GubsyRuntime& runtime) {
-    int count = 0;
-    SDL_JoystickID* gamepads = SDL_GetGamepads(&count);
-    if (gamepads == nullptr)
-        return;
-    for (int index = 0; index < count; ++index) {
-        const int device_id = static_cast<int>(gamepads[index]);
-        const GubsyLobbyState& lobby = gubsy_get_lobby_state(runtime);
-        if (assigned(lobby, device_id))
-            continue;
-        for (int player = 0; player < static_cast<int>(lobby.local_players.size()); ++player) {
-            if (has_gamepad(lobby.local_players[static_cast<std::size_t>(player)]))
-                continue;
-            gubsy_toggle_lobby_player_device(
-                runtime, player,
-                GubsyLobbyDeviceAssignment{InputSourceType::Gamepad, device_id});
-            break;
-        }
-    }
-    SDL_free(gamepads);
-}
 
 std::uint8_t random_byte(State& state) {
     state.divider = static_cast<std::uint8_t>(state.divider * 17U + 31U);
@@ -313,6 +187,11 @@ int run(const content::Rom& rom, const content::Catalog& content, int frame_limi
         std::filesystem::path(TETRIS_SOURCE_DIR) / "data" / "runtime";
     std::error_code error;
     std::filesystem::create_directories(data_root, error);
+    if (error) {
+        std::fprintf(stderr, "could not create runtime data directory: %s\n",
+                     error.message().c_str());
+        return 1;
+    }
 
     GubsyAppConfig config;
     config.enable_mods = false;
@@ -328,14 +207,20 @@ int run(const content::Rom& rom, const content::Catalog& content, int frame_limi
     config.resizable_window = true;
 
     GubsyRuntime runtime;
-    if (!init_gubsy_runtime(runtime, config) || !gubsy_init_sdl_renderer(runtime)) {
-        std::fprintf(stderr, "could not initialize Gubsy/SDL3: %s\n", SDL_GetError());
+    if (!init_gubsy_runtime(runtime, config)) {
+        std::fprintf(stderr, "could not initialize Gubsy: %s\n", SDL_GetError());
+        return 1;
+    }
+    if (!gubsy_init_sdl_renderer(runtime)) {
+        std::fprintf(stderr, "could not initialize SDL3 rendering: %s\n", SDL_GetError());
+        cleanup_gubsy_runtime(runtime);
         return 1;
     }
     GubsyFrame frame = gubsy_get_frame(runtime);
     if (!place_window(frame.window) || !register_controls(runtime) ||
         !init_imgui_layer(frame.window, frame.renderer)) {
         std::fprintf(stderr, "could not initialize window, controls, or ImGui\n");
+        cleanup_gubsy_runtime(runtime);
         return 1;
     }
     ImGui::GetIO().ConfigFlags &= ~ImGuiConfigFlags_NavEnableGamepad;
@@ -345,6 +230,7 @@ int run(const content::Rom& rom, const content::Catalog& content, int frame_limi
     if (!video.initialize(frame.renderer, content)) {
         std::fprintf(stderr, "could not initialize ROM graphics\n");
         shutdown_imgui_layer();
+        cleanup_gubsy_runtime(runtime);
         return 1;
     }
     const std::string title = "Native GB Tetris Modern - " + rom.digest;
@@ -409,7 +295,7 @@ int run(const content::Rom& rom, const content::Catalog& content, int frame_limi
         const bool editing_controls = state.controls.is_open(runtime);
         state.controls.update(runtime, one, static_cast<float>(elapsed), frame.render_width,
                               frame.render_height);
-        if (down(runtime, 0, Action::quit) && !editing_controls)
+        if (action_down(runtime, 0, Action::quit) && !editing_controls)
             running = false;
         if (imgui_want_capture_keyboard()) {
             one = {};
@@ -467,6 +353,7 @@ int run(const content::Rom& rom, const content::Catalog& content, int frame_limi
         std::fprintf(stderr, "could not save high scores: %s\n", high_score_error.c_str());
     state.audio.shutdown();
     shutdown_imgui_layer();
+    cleanup_gubsy_runtime(runtime);
     return 0;
 }
 

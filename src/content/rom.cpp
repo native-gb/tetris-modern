@@ -75,7 +75,46 @@ bool load_rom(const std::filesystem::path& path, Rom& result, std::string& error
 }
 
 bool is_supported(const Rom& rom) {
-    return rom.bytes.size() == supported_size && rom.digest == supported_sha1;
+    std::string error;
+    return validate_supported(rom, error);
+}
+
+bool validate_supported(const Rom& rom, std::string& error) {
+    error.clear();
+    if (rom.bytes.size() != supported_size) {
+        error = "unsupported ROM size: expected 32768 bytes, received " +
+                std::to_string(rom.bytes.size());
+        return false;
+    }
+    if (rom.title != "TETRIS") {
+        error = "unsupported ROM title: expected TETRIS, received " + rom.title;
+        return false;
+    }
+    if (rom.revision != 1) {
+        error = "unsupported ROM revision: expected 1, received " +
+                std::to_string(rom.revision);
+        return false;
+    }
+    if (rom.bytes[0x143] != 0 || rom.bytes[0x146] != 0 || rom.bytes[0x147] != 0 ||
+        rom.bytes[0x148] != 0 || rom.bytes[0x149] != 0 || rom.bytes[0x14A] != 0 ||
+        rom.bytes[0x14B] != 1) {
+        error = "unsupported Tetris cartridge metadata";
+        return false;
+    }
+    if (!rom.header_checksum_valid) {
+        error = "ROM header checksum is invalid";
+        return false;
+    }
+    if (!rom.global_checksum_valid) {
+        error = "ROM global checksum is invalid";
+        return false;
+    }
+    if (rom.digest != supported_sha1) {
+        error = "unsupported ROM SHA-1: expected " + std::string(supported_sha1) +
+                ", received " + rom.digest;
+        return false;
+    }
+    return true;
 }
 
 } // namespace tetris::content

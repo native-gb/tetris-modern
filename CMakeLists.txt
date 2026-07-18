@@ -98,6 +98,18 @@ if(TETRIS_BUILD_APP)
         message(FATAL_ERROR "gb-audio is required; set TETRIS_GB_AUDIO_DIR to its source tree")
     endif()
 
+    add_library(tetris-rendering STATIC
+        src/presentation/endings.cpp
+        src/presentation/renderer.cpp
+        src/presentation/ui.cpp
+    )
+    target_include_directories(tetris-rendering PUBLIC
+        "${CMAKE_CURRENT_SOURCE_DIR}/src"
+        "${TETRIS_GUBSY_DIR}/include")
+    target_link_libraries(tetris-rendering PUBLIC
+        tetris-game tetris-content tetris-presentation SDL3::SDL3)
+    tetris_target_defaults(tetris-rendering)
+
     add_library(tetris-audio STATIC
         src/audio/director.cpp
         src/audio/music.cpp
@@ -108,15 +120,17 @@ if(TETRIS_BUILD_APP)
     target_link_libraries(tetris-audio PUBLIC tetris-game tetris-content native-gb::audio SDL3::SDL3)
     tetris_target_defaults(tetris-audio)
 
+    add_library(tetris-app-input STATIC src/app/input.cpp)
+    target_include_directories(tetris-app-input PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/src")
+    target_link_libraries(tetris-app-input PUBLIC tetris-game gubsy::engine)
+    tetris_target_defaults(tetris-app-input)
+
     add_executable(native-gb-tetris-modern
         src/app/app.cpp
         src/app/controls_menu.cpp
         src/app/debug_ui.cpp
         src/app/main.cpp
         src/app/persistence.cpp
-        src/presentation/endings.cpp
-        src/presentation/renderer.cpp
-        src/presentation/ui.cpp
     )
     target_include_directories(native-gb-tetris-modern PRIVATE
         "${CMAKE_CURRENT_SOURCE_DIR}/src"
@@ -127,7 +141,8 @@ if(TETRIS_BUILD_APP)
         TETRIS_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}"
         TETRIS_GUBSY_ASSETS_DIR="${TETRIS_GUBSY_DIR}/src/assets")
     target_link_libraries(native-gb-tetris-modern PRIVATE
-        tetris-game tetris-content tetris-presentation tetris-audio gubsy::engine)
+        tetris-game tetris-content tetris-presentation tetris-rendering
+        tetris-audio tetris-app-input gubsy::engine)
     tetris_target_defaults(native-gb-tetris-modern)
 endif()
 
@@ -176,5 +191,40 @@ if(BUILD_TESTING)
         endif()
         tetris_target_defaults(tetris-audio-tests)
         add_test(NAME tetris_audio COMMAND tetris-audio-tests)
+        set_tests_properties(tetris_audio PROPERTIES
+            ENVIRONMENT "SDL_AUDIODRIVER=dummy")
+
+        add_executable(tetris-audio-output-tests tests/audio_output_tests.cpp)
+        target_link_libraries(tetris-audio-output-tests PRIVATE tetris-audio)
+        if(TETRIS_TEST_ROM)
+            target_compile_definitions(tetris-audio-output-tests PRIVATE
+                TETRIS_TEST_ROM="${TETRIS_TEST_ROM}")
+        endif()
+        tetris_target_defaults(tetris-audio-output-tests)
+        add_test(NAME tetris_audio_output COMMAND tetris-audio-output-tests)
+        set_tests_properties(tetris_audio_output PROPERTIES
+            ENVIRONMENT "SDL_AUDIODRIVER=dummy")
+
+        add_executable(tetris-music-trace tools/music_trace.cpp)
+        target_link_libraries(tetris-music-trace PRIVATE tetris-audio)
+        tetris_target_defaults(tetris-music-trace)
+
+        add_executable(tetris-presentation-tests tests/presentation_tests.cpp)
+        target_link_libraries(tetris-presentation-tests PRIVATE tetris-rendering)
+        if(TETRIS_TEST_ROM)
+            target_compile_definitions(tetris-presentation-tests PRIVATE
+                TETRIS_TEST_ROM="${TETRIS_TEST_ROM}")
+        endif()
+        tetris_target_defaults(tetris-presentation-tests)
+        add_test(NAME tetris_presentation COMMAND tetris-presentation-tests)
+        set_tests_properties(tetris_presentation PROPERTIES
+            ENVIRONMENT "SDL_VIDEODRIVER=dummy;SDL_AUDIODRIVER=dummy")
+
+        add_executable(tetris-input-tests tests/input_tests.cpp)
+        target_link_libraries(tetris-input-tests PRIVATE tetris-app-input)
+        tetris_target_defaults(tetris-input-tests)
+        add_test(NAME tetris_input COMMAND tetris-input-tests)
+        set_tests_properties(tetris_input PROPERTIES
+            ENVIRONMENT "SDL_VIDEODRIVER=dummy;SDL_AUDIODRIVER=dummy")
     endif()
 endif()

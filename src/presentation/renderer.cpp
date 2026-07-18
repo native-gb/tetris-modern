@@ -96,6 +96,22 @@ Placement centered(const GubsyFrame& frame, Offset offset) {
     };
 }
 
+std::array<Placement, 2> versus_placements(const GubsyFrame& frame, Offset offset) {
+    constexpr float screen_width = 160.0F;
+    constexpr float screen_height = 144.0F;
+    constexpr float gap_width = 16.0F;
+    const float scale = std::max(1.0F, std::floor(std::min(
+        static_cast<float>(frame.render_width) / (screen_width * 2.0F + gap_width),
+        static_cast<float>(frame.render_height) / screen_height)));
+    const float tile = 8.0F * scale;
+    const float gap = gap_width * scale;
+    const float width = screen_width * 2.0F * scale + gap;
+    const float x = (static_cast<float>(frame.render_width) - width) * 0.5F + offset.x * scale;
+    const float y = (static_cast<float>(frame.render_height) - screen_height * scale) * 0.5F +
+                    offset.y * scale;
+    return {{{x, y, tile}, {x + screen_width * scale + gap, y, tile}}};
+}
+
 const char* map_for(const GameFlow& flow, Bank& bank) {
     bank = Bank::gameplay;
     switch (flow.screen()) {
@@ -329,6 +345,7 @@ void draw_session(SDL_Renderer* renderer, const Renderer& video,
         const float width = 10.0F * placement.tile * progress;
         SDL_SetRenderDrawColor(renderer, 224, 239, 207,
                                settings.effects == Intensity::full ? 235 : 170);
+        (void)SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
         for (const int row : game.clearing_rows()) {
             const SDL_FRect beam{placement.x + 7.0F * placement.tile - width * 0.5F,
                                  placement.y + (static_cast<float>(row) + 0.4F) * placement.tile,
@@ -348,10 +365,12 @@ void draw_session(SDL_Renderer* renderer, const Renderer& video,
                 (void)SDL_RenderFillRect(renderer, &spark);
             }
         }
+        (void)SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_NONE);
     }
 }
 
 void draw_grid(SDL_Renderer* renderer, const Placement& placement) {
+    (void)SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
     SDL_SetRenderDrawColor(renderer, 80, 220, 255, 110);
     for (int column = 0; column <= 20; ++column) {
         const float x = placement.x + static_cast<float>(column) * placement.tile;
@@ -361,22 +380,31 @@ void draw_grid(SDL_Renderer* renderer, const Placement& placement) {
         const float y = placement.y + static_cast<float>(row) * placement.tile;
         (void)SDL_RenderLine(renderer, placement.x, y, placement.x + 20 * placement.tile, y);
     }
+    (void)SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_NONE);
 }
 
 void draw_background(SDL_Renderer* renderer, const GubsyFrame& frame,
                      const Settings& settings, float pulse) {
     SDL_SetRenderDrawColor(renderer, 9, 12, 18, 255);
     (void)SDL_RenderClear(renderer);
-    if (settings.background != Background::stars)
+    if (settings.layout != Layout::widescreen_frame ||
+        settings.background != Background::stars)
         return;
     for (int star = 0; star < 180; ++star) {
         const std::uint32_t seed = static_cast<std::uint32_t>(star) * 747796405U + 2891336453U;
         const float x = static_cast<float>(seed % static_cast<std::uint32_t>(std::max(frame.render_width, 1)));
         const float y = static_cast<float>((seed >> 12U) % static_cast<std::uint32_t>(std::max(frame.render_height, 1)));
-        const Uint8 brightness = static_cast<Uint8>(90.0F + pulse * 90.0F + static_cast<float>((seed >> 24U) & 63U));
-        SDL_SetRenderDrawColor(renderer, 155, brightness, 139, 220);
+        const SDL_Color color = palette[static_cast<std::size_t>((seed >> 24U) % 3U)];
+        SDL_SetRenderDrawColor(renderer, color.r, color.g, color.b, 255);
         const SDL_FRect point{x, y, (seed & 1U) != 0 ? 2.0F : 1.0F, (seed & 1U) != 0 ? 2.0F : 1.0F};
         (void)SDL_RenderFillRect(renderer, &point);
+    }
+    if (pulse > 0.0F) {
+        (void)SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
+        SDL_SetRenderDrawColor(renderer, palette[0].r, palette[0].g, palette[0].b,
+                               static_cast<Uint8>(pulse * 72.0F));
+        (void)SDL_RenderFillRect(renderer, nullptr);
+        (void)SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_NONE);
     }
 }
 
@@ -420,19 +448,10 @@ void Renderer::draw(SDL_Renderer* renderer, const GubsyFrame& frame,
             draw_grid(renderer, placement);
         return;
     }
-    Bank bank = Bank::gameplay;
-    const char* map_id = map_for(flow, bank);
-    if (map_id != nullptr) {
-        if (const content::Tilemap* map = content.find_tilemap(map_id))
-            draw_map(renderer, *this, bank, *map, placement);
-    }
-
     if (flow.screen() == Screen::versus_gameplay) {
-        const float gap = placement.tile * 2;
-        Placement first = placement;
-        first.x = (static_cast<float>(frame.render_width) - (40 * placement.tile + gap)) * 0.5F;
-        Placement second = first;
-        second.x += 20 * placement.tile + gap;
+        const auto placements = versus_placements(frame, shake_offset(effects, settings));
+        const Placement first = placements[0];
+        const Placement second = placements[1];
         if (const content::Tilemap* map = content.find_tilemap("multiplayer-gameplay")) {
             draw_map(renderer, *this, Bank::multiplayer, *map, first);
             draw_map(renderer, *this, Bank::multiplayer, *map, second);
@@ -444,6 +463,13 @@ void Renderer::draw(SDL_Renderer* renderer, const GubsyFrame& frame,
         draw_versus_status(renderer, *this, content, flow.versus(), first, second);
         if (debug.grid) { draw_grid(renderer, first); draw_grid(renderer, second); }
         return;
+    }
+
+    Bank bank = Bank::gameplay;
+    const char* map_id = map_for(flow, bank);
+    if (map_id != nullptr) {
+        if (const content::Tilemap* map = content.find_tilemap(map_id))
+            draw_map(renderer, *this, bank, *map, placement);
     }
 
     if (flow.screen() == Screen::gameplay || flow.screen() == Screen::demo) {

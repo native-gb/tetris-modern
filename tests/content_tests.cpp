@@ -92,6 +92,50 @@ void test_sha1() {
            "SHA-1 matches its standard test vector");
 }
 
+void test_profile_validation_errors() {
+    using namespace tetris::content;
+    Rom rom;
+    rom.bytes.resize(supported_size);
+    rom.title = "TETRIS";
+    rom.revision = 1;
+    rom.bytes[0x14A] = 0;
+    rom.bytes[0x14B] = 1;
+    rom.header_checksum_valid = true;
+    rom.global_checksum_valid = true;
+    rom.digest = std::string(supported_sha1);
+    std::string error;
+    expect(validate_supported(rom, error), "exact supported metadata validates");
+
+    Rom changed = rom;
+    changed.bytes.pop_back();
+    expect(!validate_supported(changed, error) && error.find("size") != std::string::npos,
+           "wrong ROM size reports the size mismatch");
+    changed = rom;
+    changed.title = "NOT TETRIS";
+    expect(!validate_supported(changed, error) && error.find("title") != std::string::npos,
+           "wrong title reports the metadata mismatch");
+    changed = rom;
+    changed.revision = 0;
+    expect(!validate_supported(changed, error) && error.find("revision") != std::string::npos,
+           "wrong revision is identified explicitly");
+    changed = rom;
+    changed.bytes[0x147] = 1;
+    expect(!validate_supported(changed, error) && error.find("metadata") != std::string::npos,
+           "wrong cartridge profile is identified explicitly");
+    changed = rom;
+    changed.header_checksum_valid = false;
+    expect(!validate_supported(changed, error) && error.find("header checksum") != std::string::npos,
+           "bad header checksum is identified explicitly");
+    changed = rom;
+    changed.global_checksum_valid = false;
+    expect(!validate_supported(changed, error) && error.find("global checksum") != std::string::npos,
+           "bad global checksum is identified explicitly");
+    changed = rom;
+    changed.digest.front() = '0';
+    expect(!validate_supported(changed, error) && error.find("SHA-1") != std::string::npos,
+           "wrong supported revision hash is identified explicitly");
+}
+
 #ifdef TETRIS_TEST_ROM
 void test_supported_catalog() {
     using namespace tetris::content;
@@ -207,6 +251,7 @@ void test_supported_catalog() {
 
 int main() {
     test_sha1();
+    test_profile_validation_errors();
 #ifdef TETRIS_TEST_ROM
     test_supported_catalog();
 #endif

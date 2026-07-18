@@ -24,6 +24,7 @@ struct Rom {
 };
 
 bool load_rom(const std::filesystem::path& path, Rom& result, std::string& error);
+bool validate_supported(const Rom& rom, std::string& error);
 bool is_supported(const Rom& rom);
 
 } // namespace tetris::content

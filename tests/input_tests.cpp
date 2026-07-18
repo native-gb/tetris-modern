@@ -1,5 +1,6 @@
 #include "app/input.hpp"
 #include "game/flow.hpp"
+#include "gameplay_fixture.hpp"
 
 #include <SDL3/SDL.h>
 #include <gubsy/runtime.hpp>
@@ -119,7 +120,9 @@ void controller_press(GubsyRuntime& runtime, VirtualGamepad& gamepad,
 
 void verify_controller_only_flow(GubsyRuntime& runtime, VirtualGamepad& gamepad) {
     GameFlow flow;
-    flow.start({});
+    flow.start({.gameplay = tetris::test::gameplay_data(),
+                .type_a_demo = {}, .type_b_demo = {},
+                .demo_pieces = {}, .type_b_demo_garbage = {}});
     for (int frame = 0; frame < 250; ++frame)
         flow.tick(flow_input(read_buttons(runtime, 0)));
     require(flow.screen() == Screen::copyright_skippable,

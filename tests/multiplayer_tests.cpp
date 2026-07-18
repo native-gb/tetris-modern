@@ -1,4 +1,5 @@
 #include "game/multiplayer.hpp"
+#include "gameplay_fixture.hpp"
 
 #include <array>
 #include <cstdio>
@@ -73,7 +74,7 @@ void test_sequence_and_round_setup() {
     VersusRandom random = round_random();
     random.pieces.back() = {PieceKind::T};
     VersusMatch match;
-    match.start({1, 3}, random);
+    match.start(tetris::test::gameplay_data(), {1, 3}, random);
     expect(match.state() == MatchState::playing, "versus starts in play");
     expect(match.player(0).level() == 1 && match.player(1).level() == 1 &&
                match.player(0).lines() == 30 && match.player(1).lines() == 30,
@@ -93,7 +94,7 @@ void test_sequence_and_round_setup() {
 void test_attacks_and_pause() {
     using namespace tetris;
     VersusMatch match;
-    match.start({}, round_random());
+    match.start(tetris::test::gameplay_data(), {}, round_random());
     force_clear(match, 0, 4);
     expect(match.pending_garbage(1) == 4, "Tetris queues four rows for the opponent");
     expect(match.player(1).board().at({match.garbage_hole(), 17}) == Block::empty,
@@ -111,7 +112,7 @@ void test_attacks_and_pause() {
     }
 
     VersusMatch controls;
-    controls.start({}, round_random());
+    controls.start(tetris::test::gameplay_data(), {}, round_random());
     force_clear(controls, 0, 1);
     expect(controls.pending_garbage(1) == 0, "single sends no garbage");
     tick(controls, {}, {.start = true});
@@ -129,7 +130,7 @@ void test_results_and_draws() {
     using namespace tetris;
     const VersusRandom random = round_random();
     VersusMatch match;
-    match.start({}, random);
+    match.start(tetris::test::gameplay_data(), {}, random);
     match.edit_player(0).debug_set_state(PlayState::complete);
     tick(match);
     expect(match.state() == MatchState::round_over &&
@@ -144,7 +145,7 @@ void test_results_and_draws() {
            "four wins complete the match and use the original display sentinel");
 
     VersusMatch draw;
-    draw.start({}, random);
+    draw.start(tetris::test::gameplay_data(), {}, random);
     draw.edit_player(0).debug_set_state(PlayState::complete);
     draw.edit_player(1).debug_set_state(PlayState::complete);
     tick(draw);

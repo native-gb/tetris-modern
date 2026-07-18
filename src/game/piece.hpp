@@ -1,6 +1,6 @@
 #pragma once
 
-#include "game/types.hpp"
+#include "game/gameplay_data.hpp"
 
 #include <array>
 
@@ -23,8 +23,8 @@ FallingPiece spawn_piece(PieceSpec piece);
 
 Rotation clockwise(Rotation rotation);
 Rotation counterclockwise(Rotation rotation);
-std::array<Cell, 4> piece_cells(PieceSpec piece);
-std::array<Cell, 4> occupied_cells(const FallingPiece& piece);
+PieceShape piece_cells(const GameplayData& data, PieceSpec piece);
+PieceShape occupied_cells(const GameplayData& data, const FallingPiece& piece);
 std::array<Block, 4> blocks_for(const FallingPiece& piece);
 Block garbage_block(std::uint8_t sample);
 

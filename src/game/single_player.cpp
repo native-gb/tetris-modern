@@ -32,11 +32,12 @@ ClearTiming timing_for(LineClearSpeed speed) {
 
 } // namespace
 
-void SinglePlayer::start(GameRules rules, const StartupRandom& random,
+void SinglePlayer::start(const GameplayData& data, GameRules rules, const StartupRandom& random,
                          std::span<const PieceSpec> fixed_pieces, Buttons initial_buttons) {
     assert(rules.starting_level >= 0 && rules.starting_level <= 9);
     assert(rules.type_b_height >= 0 && rules.type_b_height <= 5);
 
+    data_ = data;
     rules_ = rules;
     board_.clear();
     wipe_board_.clear();
@@ -54,7 +55,7 @@ void SinglePlayer::start(GameRules rules, const StartupRandom& random,
     score_ = 0;
     soft_drop_points_ = 0;
     line_counts_ = {};
-    gravity_frames_ = frames_per_drop(level_, rules.heart_mode);
+    gravity_frames_ = frames_per_drop(data_, level_, rules.heart_mode);
     fall_timer_ = gravity_frames_;
     horizontal_repeat_timer_ = initial_repeat_delay;
     delay_timer_ = 0;
@@ -246,7 +247,7 @@ bool SinglePlayer::try_move(Cell distance) {
 }
 
 bool SinglePlayer::collides(const FallingPiece& piece) const {
-    for (const Cell cell : occupied_cells(piece)) {
+    for (const Cell cell : occupied_cells(data_, piece)) {
         if (board_.occupied(cell))
             return true;
     }
@@ -255,7 +256,7 @@ bool SinglePlayer::collides(const FallingPiece& piece) const {
 
 void SinglePlayer::land() {
     const bool at_spawn = piece_.origin == spawn_origin;
-    const auto cells = occupied_cells(piece_);
+    const auto cells = occupied_cells(data_, piece_);
     const auto blocks = blocks_for(piece_);
     for (std::size_t index = 0; index < cells.size(); ++index) {
         const Cell cell = cells[index];
@@ -369,7 +370,7 @@ void SinglePlayer::update_level() {
     if (next <= level_)
         return;
     level_ = next;
-    gravity_frames_ = frames_per_drop(level_, rules_.heart_mode);
+    gravity_frames_ = frames_per_drop(data_, level_, rules_.heart_mode);
     emit(GameEvent::level_changed, level_);
 }
 

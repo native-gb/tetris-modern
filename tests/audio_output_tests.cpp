@@ -46,7 +46,7 @@ tetris::FlowInput input(tetris::Buttons one = {}, tetris::Buttons two = {}) {
 }
 
 tetris::FlowResources resources(const tetris::content::Catalog& content) {
-    return {content.type_a_demo.runs, content.type_b_demo.runs,
+    return {content.gameplay.data, content.type_a_demo.runs, content.type_b_demo.runs,
             content.demo_pieces, content.type_b_demo_garbage.bytes};
 }
 
@@ -72,8 +72,8 @@ void reach_title(tetris::GameFlow& flow, tetris::audio::Output& output) {
     press(flow, output, {.rotate_right = true});
 }
 
-void block_below_spawn(tetris::SinglePlayer& game) {
-    const auto cells = tetris::occupied_cells(game.piece());
+void block_below_spawn(const tetris::GameplayData& data, tetris::SinglePlayer& game) {
+    const auto cells = tetris::occupied_cells(data, game.piece());
     const auto lowest = std::ranges::max_element(cells, {}, &tetris::Cell::y);
     game.edit_board().set({lowest->x, lowest->y + 1}, tetris::Block::j);
 }
@@ -160,14 +160,14 @@ void test_output() {
     flow.start(resources(content));
     flow.start_session({.type = GameType::type_a}, startup());
     output.tick(flow, 7, false);
-    block_below_spawn(flow.edit_game());
+    block_below_spawn(content.gameplay.data, flow.edit_game());
     tick(flow, output, {.down = true});
     int guard = 0;
     while (flow.game().state() != PlayState::falling && guard < 40) {
         release(flow, output);
         ++guard;
     }
-    block_below_spawn(flow.edit_game());
+    block_below_spawn(content.gameplay.data, flow.edit_game());
     tick(flow, output, {.down = true});
     expect(guard < 40 && flow.screen() == Screen::game_over,
            "two spawn locks reach the authentic top-out route");

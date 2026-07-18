@@ -28,7 +28,7 @@ std::array<PieceSpec, versus_piece_count> make_versus_piece_sequence(
 
 class VersusMatch {
 public:
-    void start(VersusSetup setup, const VersusRandom& random);
+    void start(const GameplayData& data, VersusSetup setup, const VersusRandom& random);
     void next_round(VersusSetup setup, const VersusRandom& random);
     void tick(TickInput player_one, TickInput player_two);
     void set_line_clear_speed(LineClearSpeed speed);
@@ -58,6 +58,7 @@ private:
     void finish(RoundWinner winner);
 
     std::array<Player, 2> players_{};
+    GameplayData data_{};
     MatchState state_{MatchState::round_over};
     RoundWinner winner_{RoundWinner::none};
     std::array<int, 2> wins_{};

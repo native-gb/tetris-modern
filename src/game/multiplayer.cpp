@@ -50,7 +50,9 @@ std::array<PieceSpec, versus_piece_count> make_versus_piece_sequence(
     return pieces;
 }
 
-void VersusMatch::start(VersusSetup setup, const VersusRandom& random) {
+void VersusMatch::start(const GameplayData& data, VersusSetup setup,
+                        const VersusRandom& random) {
+    data_ = data;
     wins_ = {};
     begin_round(setup, random);
 }
@@ -66,8 +68,8 @@ void VersusMatch::begin_round(VersusSetup setup, const VersusRandom& random) {
     startup.garbage = random.garbage;
     for (int index = 0; index < 2; ++index) {
         Player& player = players_[static_cast<std::size_t>(index)];
-        player.game.start({.type = GameType::versus, .starting_level = 1,
-                           .type_b_height = heights[static_cast<std::size_t>(index)]},
+        player.game.start(data_, {.type = GameType::versus, .starting_level = 1,
+                                  .type_b_height = heights[static_cast<std::size_t>(index)]},
                           startup, random.pieces);
         player.game.set_line_clear_speed(clear_speed_);
         player.pending = 0;

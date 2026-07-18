@@ -185,12 +185,13 @@ void test_supported_catalog() {
     expect_provenance(catalog.type_b_demo_garbage.source, rom);
     expect_provenance(catalog.sprites.source, rom);
     expect_provenance(catalog.gameplay.gravity_source, rom);
-    expect(catalog.gameplay.gravity_frames[0] == 52 &&
-               catalog.gameplay.gravity_frames[20] == 2,
+    expect(catalog.gameplay.data.gravity_frames[0] == 52 &&
+               catalog.gameplay.data.gravity_frames[20] == 2,
            "the complete gravity table is extracted from the ROM");
-    for (const TetrominoDefinition& piece : catalog.gameplay.tetrominoes) {
+    for (std::size_t index = 0; index < catalog.gameplay.tetrominoes.size(); ++index) {
+        const TetrominoDefinition& piece = catalog.gameplay.tetrominoes[index];
         expect_provenance(piece.source, rom);
-        expect(piece.cells == tetris::piece_cells(piece.piece),
+        expect(piece.cells == catalog.gameplay.data.piece_shapes[index],
                "every semantic tetromino orientation matches its ROM matrix");
     }
     expect(catalog.gameplay.tetrominoes[3].cells[0] == tetris::Cell{0, 1},

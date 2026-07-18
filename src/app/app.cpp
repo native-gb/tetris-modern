@@ -74,7 +74,8 @@ FlowInput make_input(State& state, Buttons one, Buttons two) {
 }
 
 void initialize(State& state, const content::Catalog& content) {
-    state.flow.start({content.type_a_demo.runs, content.type_b_demo.runs,
+    state.flow.start({content.gameplay.data,
+                      content.type_a_demo.runs, content.type_b_demo.runs,
                       content.demo_pieces, content.type_b_demo_garbage.bytes});
     state.flow.set_line_clear_speed(state.settings.line_clear_speed);
     state.effects = {};

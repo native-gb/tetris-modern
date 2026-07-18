@@ -216,6 +216,13 @@ if(BUILD_TESTING)
         add_executable(tetris-music-trace tools/music_trace.cpp)
         target_link_libraries(tetris-music-trace PRIVATE tetris-audio)
         tetris_target_defaults(tetris-music-trace)
+        set_target_properties(tetris-music-trace PROPERTIES
+            OUTPUT_NAME native-gb-tetris-music-trace)
+
+        add_executable(native-gb-tetris-trace tools/semantic_trace.cpp)
+        target_link_libraries(native-gb-tetris-trace PRIVATE
+            tetris-game tetris-content tetris-audio)
+        tetris_target_defaults(native-gb-tetris-trace)
 
         add_executable(tetris-presentation-tests tests/presentation_tests.cpp)
         target_link_libraries(tetris-presentation-tests PRIVATE tetris-rendering)

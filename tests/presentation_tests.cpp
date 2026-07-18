@@ -152,7 +152,8 @@ void test_scaling_and_widescreen(SDL_Renderer* renderer, SDL_Window* window,
     using namespace tetris;
     using namespace tetris::presentation;
     GameFlow flow;
-    flow.start({content.type_a_demo.runs, content.type_b_demo.runs,
+    flow.start({content.gameplay.data,
+                content.type_a_demo.runs, content.type_b_demo.runs,
                 content.demo_pieces, content.type_b_demo_garbage.bytes});
     const Settings original = original_settings();
 
@@ -201,7 +202,8 @@ void test_flow_compositions(SDL_Renderer* renderer, SDL_Window* window,
     const Settings settings = enhanced_settings();
     Target target = make_target(renderer, 1280, 720);
     GameFlow flow;
-    flow.start({content.type_a_demo.runs, content.type_b_demo.runs,
+    flow.start({content.gameplay.data,
+                content.type_a_demo.runs, content.type_b_demo.runs,
                 content.demo_pieces, content.type_b_demo_garbage.bytes});
     tick(flow, 250);
     press(flow, {.rotate_right = true});
@@ -218,7 +220,8 @@ void test_flow_compositions(SDL_Renderer* renderer, SDL_Window* window,
            "semantic presentation grid visibly overlays the scene");
 
     GameFlow game;
-    game.start({content.type_a_demo.runs, content.type_b_demo.runs,
+    game.start({content.gameplay.data,
+                content.type_a_demo.runs, content.type_b_demo.runs,
                 content.demo_pieces, content.type_b_demo_garbage.bytes});
     game.start_session({.type = GameType::type_a}, startup());
     draw(renderer, window, target, video, content, game, settings);
@@ -269,7 +272,8 @@ void test_versus_results(SDL_Renderer* renderer, SDL_Window* window,
                          const tetris::content::Catalog& content) {
     using namespace tetris;
     GameFlow flow;
-    flow.start({content.type_a_demo.runs, content.type_b_demo.runs,
+    flow.start({content.gameplay.data,
+                content.type_a_demo.runs, content.type_b_demo.runs,
                 content.demo_pieces, content.type_b_demo_garbage.bytes});
     tick(flow, 250);
     press(flow, {.rotate_right = true});
@@ -305,7 +309,8 @@ void test_versus_fit(SDL_Renderer* renderer, SDL_Window* window,
                      const tetris::content::Catalog& content) {
     using namespace tetris;
     GameFlow flow;
-    flow.start({content.type_a_demo.runs, content.type_b_demo.runs,
+    flow.start({content.gameplay.data,
+                content.type_a_demo.runs, content.type_b_demo.runs,
                 content.demo_pieces, content.type_b_demo_garbage.bytes});
     tick(flow, 250);
     press(flow, {.rotate_right = true});

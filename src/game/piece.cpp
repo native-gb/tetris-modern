@@ -2,23 +2,8 @@
 
 #include "game/board.hpp"
 
-#include <array>
-
 namespace tetris {
 namespace {
-
-using Shape = std::array<Cell, 4>;
-using Rotations = std::array<Shape, 4>;
-
-constexpr std::array<Rotations, 7> shapes = {{
-    Rotations{{Shape{{{0, 2}, {1, 2}, {2, 2}, {0, 3}}}, Shape{{{1, 1}, {1, 2}, {1, 3}, {2, 3}}}, Shape{{{2, 1}, {0, 2}, {1, 2}, {2, 2}}}, Shape{{{0, 1}, {1, 1}, {1, 2}, {1, 3}}}}},
-    Rotations{{Shape{{{0, 2}, {1, 2}, {2, 2}, {2, 3}}}, Shape{{{1, 1}, {2, 1}, {1, 2}, {1, 3}}}, Shape{{{0, 1}, {0, 2}, {1, 2}, {2, 2}}}, Shape{{{1, 1}, {1, 2}, {0, 3}, {1, 3}}}}},
-    Rotations{{Shape{{{0, 2}, {1, 2}, {2, 2}, {3, 2}}}, Shape{{{1, 0}, {1, 1}, {1, 2}, {1, 3}}}, Shape{{{0, 2}, {1, 2}, {2, 2}, {3, 2}}}, Shape{{{1, 0}, {1, 1}, {1, 2}, {1, 3}}}}},
-    Rotations{{Shape{{{1, 2}, {2, 2}, {1, 3}, {2, 3}}}, Shape{{{1, 2}, {2, 2}, {1, 3}, {2, 3}}}, Shape{{{1, 2}, {2, 2}, {1, 3}, {2, 3}}}, Shape{{{1, 2}, {2, 2}, {1, 3}, {2, 3}}}}},
-    Rotations{{Shape{{{0, 2}, {1, 2}, {1, 3}, {2, 3}}}, Shape{{{1, 1}, {0, 2}, {1, 2}, {0, 3}}}, Shape{{{0, 2}, {1, 2}, {1, 3}, {2, 3}}}, Shape{{{1, 1}, {0, 2}, {1, 2}, {0, 3}}}}},
-    Rotations{{Shape{{{1, 2}, {2, 2}, {0, 3}, {1, 3}}}, Shape{{{0, 1}, {0, 2}, {1, 2}, {1, 3}}}, Shape{{{1, 2}, {2, 2}, {0, 3}, {1, 3}}}, Shape{{{0, 1}, {0, 2}, {1, 2}, {1, 3}}}}},
-    Rotations{{Shape{{{0, 2}, {1, 2}, {2, 2}, {1, 3}}}, Shape{{{1, 1}, {1, 2}, {2, 2}, {1, 3}}}, Shape{{{1, 1}, {0, 2}, {1, 2}, {2, 2}}}, Shape{{{1, 1}, {0, 2}, {1, 2}, {1, 3}}}}},
-}};
 
 std::size_t index_of(PieceKind kind) {
     return static_cast<std::size_t>(kind);
@@ -44,8 +29,8 @@ Rotation counterclockwise(Rotation rotation) {
     return static_cast<Rotation>((value + 1U) % 4U);
 }
 
-std::array<Cell, 4> occupied_cells(const FallingPiece& piece) {
-    auto cells = piece_cells({piece.kind, piece.rotation});
+PieceShape occupied_cells(const GameplayData& data, const FallingPiece& piece) {
+    auto cells = piece_cells(data, {piece.kind, piece.rotation});
     for (Cell& cell : cells) {
         cell.x += piece.origin.x;
         cell.y += piece.origin.y;
@@ -53,8 +38,8 @@ std::array<Cell, 4> occupied_cells(const FallingPiece& piece) {
     return cells;
 }
 
-std::array<Cell, 4> piece_cells(PieceSpec piece) {
-    return shapes[index_of(piece.kind)][index_of(piece.rotation)];
+PieceShape piece_cells(const GameplayData& data, PieceSpec piece) {
+    return data.piece_shapes[index_of(piece.kind) * 4U + index_of(piece.rotation)];
 }
 
 std::array<Block, 4> blocks_for(const FallingPiece& piece) {

@@ -230,20 +230,23 @@ void GameFlow::tick_ending(const Buttons& pressed) {
     case EndingStage::scoreboard_delay:
         ending_stage_ = EndingStage::scoreboard_tally;
         scoreboard_.category = 0;
-        timer_ = scoreboard_category_frames;
         ending_elapsed_ = 0;
         break;
     case EndingStage::scoreboard_tally: {
         const int category = scoreboard_.category;
-        std::uint32_t& remaining = line_count(scoreboard_remaining_, category);
-        std::uint32_t& displayed = line_count(scoreboard_.lines, category);
-        if (remaining > 0) {
-            --remaining;
-            ++displayed;
-            scoreboard_.score = std::min<std::uint32_t>(
-                999'999, scoreboard_.score + line_clear_score(category + 1, game_.level()));
-            timer_ = 5;
-        } else if (category < 3) {
+        if (category < 4) {
+            std::uint32_t& remaining = line_count(scoreboard_remaining_, category);
+            std::uint32_t& displayed = line_count(scoreboard_.lines, category);
+            if (remaining > 0) {
+                --remaining;
+                ++displayed;
+                scoreboard_.score = std::min<std::uint32_t>(
+                    999'999,
+                    scoreboard_.score +
+                        line_clear_score(category + 1, game_.rules().starting_level));
+                timer_ = 5;
+                break;
+            }
             ++scoreboard_.category;
             timer_ = scoreboard_category_frames;
         } else if (soft_drop_remaining_ > 0) {
@@ -252,6 +255,7 @@ void GameFlow::tick_ending(const Buttons& pressed) {
             scoreboard_.score = std::min<std::uint32_t>(999'999, scoreboard_.score + 1);
             timer_ = 1;
         } else {
+            scoreboard_.category = 5;
             ending_stage_ = EndingStage::scoreboard_wait;
             ending_elapsed_ = 0;
         }

@@ -113,6 +113,7 @@ src/presentation/  canonical rendering, layouts, effects, and settings
 src/audio/         Tetris music/effect driver and SDL output
 src/app/           Gubsy window, input, persistence, and F1 tools
 tests/             domain, flow, extraction, audio, render, and controller tests
+tools/             standalone semantic trace adapters for development audits
 ```
 
 The code follows the repository `AGENTS.md` C+- style: direct state, plain
@@ -120,7 +121,9 @@ functions, concrete names, modest abstraction, and no Game Boy-shaped gameplay
 ownership. `PLAN.md` records the architecture and completion standard;
 `TASKS.md` records verification evidence.
 
-Only actual cartridge data is decoded into catalogs. Rules encoded by original
+Authenticated gravity and piece geometry enter the headless game through one
+small immutable `GameplayData` value; the simulation retains neither ROM
+offsets nor duplicate production tables. Rules encoded by original
 instructions—score bases, thresholds, menu limits, and progression formulas—are
 written as named game rules instead of being disguised as synthetic ROM tables.
 

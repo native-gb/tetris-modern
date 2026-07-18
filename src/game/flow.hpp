@@ -68,6 +68,7 @@ enum class EndingStage {
 };
 
 struct FlowResources {
+    GameplayData gameplay;
     std::span<const DemoRun> type_a_demo;
     std::span<const DemoRun> type_b_demo;
     std::span<const DemoPiece> demo_pieces;

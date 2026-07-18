@@ -228,7 +228,8 @@ void GameFlow::tick_menu(const FlowInput& input, const Buttons& pressed) {
 
 void GameFlow::begin_game(const FlowInput& input) {
     const int level = selected_type_ == GameType::type_a ? type_a_level_ : type_b_level_;
-    game_.start({.type = selected_type_, .starting_level = level,
+    game_.start(resources_.gameplay,
+                {.type = selected_type_, .starting_level = level,
                  .type_b_height = selected_type_ == GameType::type_b ? type_b_height_ : 0,
                  .heart_mode = heart_mode_}, input.startup, {}, input.player_one);
     game_.set_line_clear_speed(line_clear_speed_);
@@ -250,7 +251,8 @@ void GameFlow::begin_demo(const FlowInput& input) {
     const std::size_t begin = demo_type_b_ ? 17U : 0U;
     for (std::size_t index = begin; index < resources_.demo_pieces.size(); ++index)
         pieces.push_back(resources_.demo_pieces[index]);
-    game_.start({.type = demo_type_b_ ? GameType::type_b : GameType::type_a,
+    game_.start(resources_.gameplay,
+                {.type = demo_type_b_ ? GameType::type_b : GameType::type_a,
                  .starting_level = 9, .type_b_height = demo_type_b_ ? 2 : 0},
                 input.startup, pieces);
     game_.set_line_clear_speed(line_clear_speed_);
@@ -288,7 +290,7 @@ void GameFlow::tick_versus(const FlowInput& input, const Buttons& pressed,
         } else if (confirm(pressed)) {
             const VersusSetup setup{versus_heights_[0], versus_heights_[1]};
             if (new_match_) {
-                versus_.start(setup, input.versus);
+                versus_.start(resources_.gameplay, setup, input.versus);
                 new_match_ = false;
             } else {
                 versus_.next_round(setup, input.versus);
@@ -507,7 +509,7 @@ void GameFlow::start_session(GameRules rules, const StartupRandom& random) {
     type_a_level_ = rules.starting_level;
     type_b_level_ = rules.starting_level;
     type_b_height_ = rules.type_b_height;
-    game_.start(rules, random);
+    game_.start(resources_.gameplay, rules, random);
     game_.set_line_clear_speed(line_clear_speed_);
     screen_ = Screen::gameplay;
 }

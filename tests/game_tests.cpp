@@ -3,6 +3,7 @@
 #include "game/randomizer.hpp"
 #include "game/rules.hpp"
 #include "game/single_player.hpp"
+#include "gameplay_fixture.hpp"
 
 #include <array>
 #include <cstdio>
@@ -51,8 +52,9 @@ void test_board() {
 
 void test_piece_geometry() {
     using namespace tetris;
+    const GameplayData data = test::gameplay_data();
     const FallingPiece horizontal_i{.kind = PieceKind::I, .origin = {3, -1}};
-    const auto cells = occupied_cells(horizontal_i);
+    const auto cells = occupied_cells(data, horizontal_i);
     expect(cells == std::array<Cell, 4>{{{3, 1}, {4, 1}, {5, 1}, {6, 1}}},
            "I spawn geometry matches the original playfield coordinates");
     expect(clockwise(Rotation::spawn) == Rotation::left,
@@ -63,9 +65,12 @@ void test_piece_geometry() {
 
 void test_rules_and_randomizer() {
     using namespace tetris;
-    expect(frames_per_drop(0, false) == 52 && frames_per_drop(9, false) == 10,
+    const GameplayData data = test::gameplay_data();
+    expect(frames_per_drop(data, 0, false) == 52 &&
+               frames_per_drop(data, 9, false) == 10,
            "gravity table retains original low-level timings");
-    expect(frames_per_drop(0, true) == 9, "heart mode applies the ten-level speed offset");
+    expect(frames_per_drop(data, 0, true) == 9,
+           "heart mode applies the ten-level speed offset");
     expect(line_clear_score(4, 9) == 12'000, "Tetris scoring includes level multiplier");
     for (unsigned int value = 0; value <= 255; ++value) {
         std::uint8_t counter = static_cast<std::uint8_t>(value);
@@ -102,7 +107,7 @@ void test_every_fixed_piece_orientation() {
                                      static_cast<Rotation>(rotation)};
             const std::array fixed = {PieceSpec{}, expected, PieceSpec{}};
             SinglePlayer game;
-            game.start({}, startup_random(), fixed);
+            game.start(test::gameplay_data(), {}, startup_random(), fixed);
             expect(game.piece().kind == expected.kind &&
                        game.piece().rotation == expected.rotation &&
                        game.piece().origin == Cell{3, -1},
@@ -126,7 +131,7 @@ void test_single_player_clear() {
     SinglePlayer game;
     const std::array fixed = {PieceSpec{PieceKind::I}, PieceSpec{PieceKind::O},
                               PieceSpec{PieceKind::T}};
-    game.start({}, startup_random(), fixed);
+    game.start(test::gameplay_data(), {}, startup_random(), fixed);
     for (int column = 0; column < board_width; ++column) {
         if (column < 3 || column > 6)
             game.edit_board().set({column, 17}, Block::j);
@@ -144,7 +149,8 @@ void test_single_player_clear() {
 void test_type_b_start() {
     using namespace tetris;
     SinglePlayer game;
-    game.start({.type = GameType::type_b, .starting_level = 4, .type_b_height = 2},
+    game.start(test::gameplay_data(),
+               {.type = GameType::type_b, .starting_level = 4, .type_b_height = 2},
                startup_random());
     expect(game.lines() == 25, "Type B begins with twenty-five remaining lines");
     expect(game.board().at({0, 14}) != Block::empty, "Type B height two creates four garbage rows");

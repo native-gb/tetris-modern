@@ -1,7 +1,5 @@
 #include "content/catalog.hpp"
 
-#include "game/rules.hpp"
-
 #include <algorithm>
 #include <array>
 #include <limits>
@@ -231,18 +229,12 @@ bool extract_gameplay(const Rom& rom, const SpriteCatalog& sprites,
     GameplayCatalog gameplay;
     constexpr RomSpan gravity_span{0x1B06, 0x1B1B};
     const auto gravity = rom.range(gravity_span.begin, gravity_span.end);
-    const auto& expected_gravity = gravity_table();
-    if (gravity.size() != gameplay.gravity_frames.size()) {
+    if (gravity.size() != gameplay.data.gravity_frames.size()) {
         error = "invalid gravity table size";
         return false;
     }
-    for (std::size_t index = 0; index < gravity.size(); ++index) {
-        gameplay.gravity_frames[index] = gravity[index];
-        if (static_cast<int>(gravity[index]) != expected_gravity[index]) {
-            error = "gravity table does not match the supported rules profile";
-            return false;
-        }
-    }
+    for (std::size_t index = 0; index < gravity.size(); ++index)
+        gameplay.data.gravity_frames[index] = gravity[index];
     gameplay.gravity_source = provenance("gravity-frames", gravity_span,
                                          "byte-per-level", 21, gravity.size());
 
@@ -272,11 +264,7 @@ bool extract_gameplay(const Rom& rom, const SpriteCatalog& sprites,
             definition.cells[block] = {object.x / 8, object.y / 8};
             definition.tiles[block] = object.tile;
         }
-        if (definition.cells != piece_cells(definition.piece)) {
-            error = "tetromino geometry does not match the supported rules profile at index " +
-                    std::to_string(index);
-            return false;
-        }
+        gameplay.data.piece_shapes[index] = definition.cells;
         gameplay.tetrominoes[index] = std::move(definition);
     }
     result = std::move(gameplay);

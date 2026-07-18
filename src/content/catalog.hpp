@@ -71,7 +71,7 @@ struct TetrominoDefinition {
 
 struct GameplayCatalog {
     Provenance gravity_source;
-    std::array<std::uint8_t, 21> gravity_frames{};
+    tetris::GameplayData data;
     std::array<TetrominoDefinition, 28> tetrominoes{};
 };
 

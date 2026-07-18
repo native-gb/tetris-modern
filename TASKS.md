@@ -113,6 +113,12 @@ Verified on 2026-07-18 against ROM SHA-1
 - the isolated no-ROM checkout builds with pinned public dependencies and passes
   all 10 ROM-independent suites;
 - all 17 music driver traces match and all 14 effect programs are covered;
+- all 24 private original-vs-modern semantic scenarios pass, covering both
+  startup paths, complete menu traversal, controls/DAS/pause/preview/SFX, the
+  full attract cycle, rocket and Buran schedules, and all 17 music entries;
+- production gameplay consumes authenticated ROM-derived gravity and all 28
+  tetromino geometries through immutable `GameplayData`, with no duplicate
+  built-in production table;
 - an X11 application smoke validates ROM loading, window/controller/ImGui setup,
   canonical rendering and clean three-frame shutdown;
 - the clean executable contains no GBRE, mGBA or private-RE runtime dependency.

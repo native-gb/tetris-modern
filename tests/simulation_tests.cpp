@@ -1,6 +1,7 @@
 #include "game/demo.hpp"
 #include "game/rules.hpp"
 #include "game/single_player.hpp"
+#include "gameplay_fixture.hpp"
 
 #include <array>
 #include <cstdio>
@@ -52,9 +53,11 @@ void test_tables() {
         8, 7, 6, 5, 5, 4, 4, 3, 3, 2,
     };
     for (int level = 0; level <= 20; ++level)
-        expect(frames_per_drop(level, false) == expected[static_cast<std::size_t>(level)],
+        expect(frames_per_drop(test::gameplay_data(), level, false) ==
+                   expected[static_cast<std::size_t>(level)],
                "all gravity entries match the original table");
-    expect(frames_per_drop(15, true) == 2, "heart gravity clamps to level twenty");
+    expect(frames_per_drop(test::gameplay_data(), 15, true) == 2,
+           "heart gravity clamps to level twenty");
     expect(line_clear_score(1, 0) == 40 && line_clear_score(2, 0) == 100 &&
                line_clear_score(3, 0) == 300 && line_clear_score(4, 9) == 12'000,
            "all line score categories use the original multipliers");
@@ -63,7 +66,7 @@ void test_tables() {
 void test_movement_rotation_and_das() {
     using namespace tetris;
     SinglePlayer game;
-    game.start({}, startup());
+    game.start(test::gameplay_data(), {}, startup());
     const int original_x = game.piece().origin.x;
     tick(game, {.right = true});
     expect(game.piece().origin.x == original_x + 1, "new direction moves immediately");
@@ -92,7 +95,7 @@ void test_movement_rotation_and_das() {
 void test_clear_pipeline_and_score() {
     using namespace tetris;
     SinglePlayer game;
-    game.start({}, startup());
+    game.start(test::gameplay_data(), {}, startup());
     game.edit_board().set({0, 0}, Block::t);
     for (int column = 0; column < 6; ++column)
         game.edit_board().set({column, 17}, Block::j);
@@ -120,10 +123,10 @@ void test_clear_pipeline_and_score() {
 void test_top_out_after_second_spawn_lock() {
     using namespace tetris;
     SinglePlayer game;
-    game.start({}, startup());
+    game.start(test::gameplay_data(), {}, startup());
     const auto block_below_piece = [](SinglePlayer& session) {
-        Cell bottom = occupied_cells(session.piece())[0];
-        for (const Cell cell : occupied_cells(session.piece())) {
+        Cell bottom = occupied_cells(test::gameplay_data(), session.piece())[0];
+        for (const Cell cell : occupied_cells(test::gameplay_data(), session.piece())) {
             if (cell.y > bottom.y)
                 bottom = cell;
         }
@@ -152,7 +155,8 @@ void test_type_b_completion_and_garbage() {
         random.garbage[index] = {1, static_cast<std::uint8_t>(index)};
     }
     SinglePlayer garbage;
-    garbage.start({.type = GameType::type_b, .type_b_height = 2}, random);
+    garbage.start(test::gameplay_data(),
+                  {.type = GameType::type_b, .type_b_height = 2}, random);
     expect(garbage.board().at({0, 13}) == Block::empty,
            "Type B leaves rows above selected height empty");
     for (int row = 14; row < 18; ++row) {
@@ -162,13 +166,14 @@ void test_type_b_completion_and_garbage() {
                "every Type B garbage row receives a guaranteed hole");
     }
     random.garbage[0] = {2, 7};
-    garbage.start({.type = GameType::type_b, .type_b_height = 1}, random);
+    garbage.start(test::gameplay_data(),
+                  {.type = GameType::type_b, .type_b_height = 1}, random);
     expect(garbage.board().at({0, 16}) == Block::empty &&
                garbage.board().at({1, 16}) == Block::garbage_1,
            "occupancy parity and appearance bits remain independent");
 
     SinglePlayer completion;
-    completion.start({.type = GameType::type_b}, startup());
+    completion.start(test::gameplay_data(), {.type = GameType::type_b}, startup());
     for (int clear = 0; clear < 7; ++clear)
         force_tetris(completion);
     expect(completion.lines() == 0 && completion.state() == PlayState::complete,
@@ -180,7 +185,7 @@ void test_type_b_completion_and_garbage() {
 void test_level_saturation_pause_and_pacing() {
     using namespace tetris;
     SinglePlayer progression;
-    progression.start({}, startup());
+    progression.start(test::gameplay_data(), {}, startup());
     force_tetris(progression);
     force_tetris(progression);
     expect(progression.level() == 0, "eight lines remain level zero");
@@ -190,7 +195,7 @@ void test_level_saturation_pause_and_pacing() {
            "crossing ten lines advances level and gravity");
 
     SinglePlayer saturated;
-    saturated.start({}, startup());
+    saturated.start(test::gameplay_data(), {}, startup());
     saturated.debug_set_score(999'990);
     for (int column = 0; column < 6; ++column)
         saturated.edit_board().set({column, 17}, Block::j);
@@ -204,7 +209,7 @@ void test_level_saturation_pause_and_pacing() {
     expect(saturated.score() == 999'999, "score saturates at six display digits");
 
     SinglePlayer paused;
-    paused.start({}, startup());
+    paused.start(test::gameplay_data(), {}, startup());
     const std::uint64_t before = paused.tick_count();
     tick(paused, {.start = true});
     expect(paused.paused() && paused.tick_count() == before + 1,
@@ -215,7 +220,7 @@ void test_level_saturation_pause_and_pacing() {
 
     const auto clear_ticks = [](LineClearSpeed speed) {
         SinglePlayer game;
-        game.start({}, startup());
+        game.start(test::gameplay_data(), {}, startup());
         game.set_line_clear_speed(speed);
         for (int column = 0; column < 6; ++column)
             game.edit_board().set({column, 17}, Block::j);
@@ -254,7 +259,7 @@ void test_demo_and_oriented_fixed_pieces() {
         PieceSpec{PieceKind::O},
     };
     SinglePlayer game;
-    game.start({.starting_level = 9}, startup(), fixed);
+    game.start(test::gameplay_data(), {.starting_level = 9}, startup(), fixed);
     expect(game.piece().kind == PieceKind::I && game.piece().rotation == Rotation::reverse &&
                game.preview() == PieceSpec{PieceKind::O},
            "startup handoffs preserve oriented demo pieces and preview");

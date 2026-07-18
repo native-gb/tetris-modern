@@ -1,5 +1,6 @@
 #include "game/flow.hpp"
 #include "game/replay.hpp"
+#include "gameplay_fixture.hpp"
 
 #include <array>
 #include <cstdio>
@@ -50,7 +51,7 @@ tetris::FlowResources resources() {
         0x80, 0x2F, 0x81, 0x2F, 0x82, 0x2F, 0x83, 0x2F, 0x84, 0x2F,
         0x2F, 0x82, 0x2F, 0x83, 0x2F, 0x84, 0x2F, 0x85, 0x2F, 0x86,
     };
-    return {type_a, type_b, pieces, garbage};
+    return {tetris::test::gameplay_data(), type_a, type_b, pieces, garbage};
 }
 
 void tick(tetris::GameFlow& flow, int frames) {
@@ -342,6 +343,13 @@ void test_type_b_endings_and_scoreboard() {
     scoreboard.edit_game().debug_set_state(PlayState::complete);
     scoreboard.tick(input());
     tick(scoreboard, 100 + 128);
+    expect(scoreboard.ending_stage() == EndingStage::scoreboard_tally &&
+               scoreboard.scoreboard().category == 0 && scoreboard.timer() == 0,
+           "scoreboard begins category zero without an extra delay");
+    scoreboard.tick(input());
+    expect(scoreboard.scoreboard().category == 0 &&
+               scoreboard.scoreboard().lines.singles == 1 && scoreboard.timer() == 5,
+           "scoreboard consumes category zero on its first tally tick");
     int guard = 0;
     while (scoreboard.ending_stage() != EndingStage::scoreboard_wait && guard < 1'000) {
         scoreboard.tick(input());

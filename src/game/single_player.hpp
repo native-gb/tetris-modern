@@ -82,7 +82,7 @@ struct StartupRandom {
 
 class SinglePlayer {
 public:
-    void start(GameRules rules, const StartupRandom& random,
+    void start(const GameplayData& data, GameRules rules, const StartupRandom& random,
                std::span<const PieceSpec> fixed_pieces = {}, Buttons initial_buttons = {});
     void tick(const TickInput& input);
 
@@ -142,6 +142,7 @@ private:
     void lose();
     void emit(GameEvent event, int value = 0);
 
+    GameplayData data_{};
     GameRules rules_{};
     Board board_{};
     Board wipe_board_{};

@@ -327,7 +327,7 @@ void draw_session(SDL_Renderer* renderer, const Renderer& video,
                     raw_x, raw_y, false, sprite_bounds);
         if (board_cells) {
             SDL_SetRenderDrawColor(renderer, 72, 224, 255, 230);
-            for (const Cell cell : occupied_cells(piece)) {
+            for (const Cell cell : occupied_cells(content.gameplay.data, piece)) {
                 const SDL_FRect rect{placement.x + static_cast<float>(cell.x + 2) * placement.tile,
                                      placement.y + static_cast<float>(cell.y) * placement.tile,
                                      placement.tile, placement.tile};

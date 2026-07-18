@@ -164,5 +164,22 @@ int VersusMatch::pending_garbage(int player) const {
 }
 int VersusMatch::garbage_hole() const { return garbage_hole_; }
 bool VersusMatch::paused() const { return paused_; }
+void VersusMatch::clear_events() {
+    players_[0].game.clear_events();
+    players_[1].game.clear_events();
+}
+int VersusMatch::stack_height(int player) const {
+    const Board& board = players_[static_cast<std::size_t>(player)].game.board();
+    for (int row = 0; row < board_height; ++row) {
+        for (int column = 0; column < board_width; ++column) {
+            if (board.at({column, row}) != Block::empty)
+                return board_height - row;
+        }
+    }
+    return 0;
+}
+int VersusMatch::queued_garbage(int player) const {
+    return players_[static_cast<std::size_t>(player)].queued;
+}
 
 } // namespace tetris

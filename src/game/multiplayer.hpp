@@ -40,6 +40,9 @@ public:
     int pending_garbage(int player) const;
     int garbage_hole() const;
     bool paused() const;
+    void clear_events();
+    int stack_height(int player) const;
+    int queued_garbage(int player) const;
 
 private:
     struct Player {

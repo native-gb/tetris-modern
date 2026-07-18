@@ -19,7 +19,7 @@ bool Board::occupied(Cell cell) const {
         return true;
     if (cell.y < 0)
         return false;
-    return cells_[index_of(cell)] != 0;
+    return cells_[index_of(cell)] != Block::empty;
 }
 
 Block Board::at(Cell cell) const {
@@ -31,12 +31,12 @@ void Board::set(Cell cell, Block block) {
 }
 
 void Board::clear() {
-    cells_.fill(0);
+    cells_.fill(Block::empty);
 }
 
 bool Board::row_is_full(int row) const {
     for (int column = 0; column < board_width; ++column) {
-        if (at({column, row}) == 0)
+        if (at({column, row}) == Block::empty)
             return false;
     }
     return true;
@@ -70,7 +70,7 @@ void Board::remove_rows(std::span<const int> rows) {
 void Board::add_garbage(int row_count, int hole, Block block) {
     assert(row_count > 0 && row_count < board_height);
     assert(hole >= 0 && hole < board_width);
-    assert(block != 0);
+    assert(block != Block::empty);
 
     std::array<Block, board_width * board_height> result{};
     for (int row = 0; row < board_height - row_count; ++row) {

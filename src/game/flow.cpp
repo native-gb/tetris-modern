@@ -4,6 +4,7 @@
 #include <array>
 #include <cassert>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 namespace tetris {
@@ -17,6 +18,11 @@ bool confirm(const Buttons& pressed) {
 
 bool back(const Buttons& pressed) {
     return pressed.rotate_left;
+}
+
+bool any_button(const Buttons& buttons) {
+    return buttons.left || buttons.right || buttons.up || buttons.down ||
+           buttons.rotate_left || buttons.rotate_right || buttons.start || buttons.select;
 }
 
 void move_grid_cursor(int& value, int columns, int maximum, const Buttons& pressed) {
@@ -46,10 +52,32 @@ void GameFlow::start(FlowResources resources) {
     timer_ = 250;
     title_intervals_ = 19;
     next_demo_type_b_ = false;
+    demo_type_b_ = false;
     ending_stage_ = EndingStage::none;
+    ending_elapsed_ = 0;
+    rocket_ = Rocket::small;
+    launch_y_ = 0;
+    exhaust_y_ = 0;
+    congratulations_characters_ = 0;
+    scoreboard_ = {};
+    scoreboard_remaining_ = {};
+    soft_drop_remaining_ = 0;
+    versus_heights_ = {};
+    new_match_ = true;
+    result_timer_ = 0;
+    result_step_ = 0;
+    result_elapsed_ = 0;
+    pending_score_.reset();
+    pending_name_.clear();
+    name_cursor_ = 0;
+    name_repeat_timer_ = 0;
+    name_blink_timer_ = 0;
+    name_character_visible_ = true;
 }
 
 void GameFlow::tick(const FlowInput& input) {
+    game_.clear_events();
+    versus_.clear_events();
     const Buttons pressed = newly_pressed(input.player_one, previous_one_);
     const Buttons pressed_two = newly_pressed(input.player_two, previous_two_);
     previous_one_ = input.player_one;
@@ -106,7 +134,7 @@ void GameFlow::tick(const FlowInput& input) {
 void GameFlow::tick_copyright(const Buttons& pressed) {
     if (timer_ > 0)
         --timer_;
-    if (screen_ == Screen::copyright_skippable && confirm(pressed)) {
+    if (screen_ == Screen::copyright_skippable && any_button(pressed)) {
         return_to_title();
         return;
     }
@@ -200,7 +228,7 @@ void GameFlow::begin_game(const FlowInput& input) {
     const int level = selected_type_ == GameType::type_a ? type_a_level_ : type_b_level_;
     game_.start({.type = selected_type_, .starting_level = level,
                  .type_b_height = selected_type_ == GameType::type_b ? type_b_height_ : 0,
-                 .heart_mode = heart_mode_}, input.startup);
+                 .heart_mode = heart_mode_}, input.startup, {}, input.player_one);
     game_.set_line_clear_speed(line_clear_speed_);
     screen_ = Screen::gameplay;
 }
@@ -228,7 +256,7 @@ void GameFlow::begin_demo(const FlowInput& input) {
         for (int index = 0; index < 40; ++index) {
             const std::uint8_t tile = resources_.type_b_demo_garbage[static_cast<std::size_t>(index)];
             if (tile != 0x2F)
-                game_.edit_board().set({index % 10, 14 + index / 10}, tile);
+                game_.edit_board().set({index % 10, 14 + index / 10}, garbage_block(tile));
         }
     }
     demo_.start(demo_type_b_ ? resources_.type_b_demo : resources_.type_a_demo);
@@ -242,7 +270,7 @@ void GameFlow::tick_demo(const FlowInput& input, const Buttons& pressed) {
     }
     game_.tick({demo_.tick(), input.random});
     const std::size_t end_piece = demo_type_b_ ? 12U : 16U;
-    if (demo_.run_index() >= end_piece || game_.state() == PlayState::game_over ||
+    if (game_.fixed_pieces_consumed() >= end_piece || game_.state() == PlayState::game_over ||
         game_.state() == PlayState::complete)
         return_to_title(4);
 }
@@ -265,6 +293,7 @@ void GameFlow::tick_versus(const FlowInput& input, const Buttons& pressed,
             }
             versus_.set_line_clear_speed(line_clear_speed_);
             screen_ = Screen::versus_gameplay;
+            result_elapsed_ = 0;
         }
         return;
     }
@@ -272,12 +301,14 @@ void GameFlow::tick_versus(const FlowInput& input, const Buttons& pressed,
     if (screen_ == Screen::versus_gameplay) {
         if (result_timer_ > 0) {
             --result_timer_;
+            ++result_elapsed_;
             if (result_timer_ == 0) {
                 screen_ = versus_.state() == MatchState::match_over
                               ? Screen::versus_match_result
                               : Screen::versus_round_result;
                 result_timer_ = 25;
                 result_step_ = 0;
+                result_elapsed_ = 0;
             }
             return;
         }
@@ -291,6 +322,7 @@ void GameFlow::tick_versus(const FlowInput& input, const Buttons& pressed,
         screen_ = Screen::versus_height;
         return;
     }
+    ++result_elapsed_;
     if (--result_timer_ > 0)
         return;
     result_timer_ = 25;
@@ -306,29 +338,47 @@ void GameFlow::tick_name_entry(const Buttons& held, const Buttons& pressed) {
         screen_ = after_name_entry_;
         return;
     }
+    if (name_blink_timer_ > 0)
+        --name_blink_timer_;
+    if (name_blink_timer_ == 0) {
+        name_blink_timer_ = 7;
+        name_character_visible_ = !name_character_visible_;
+    }
     constexpr std::string_view normal = "ABCDEFGHIJKLMNOPQRSTUVWXYZ.-* ";
     constexpr std::string_view heart = "ABCDEFGHIJKLMNOPQRSTUVWXYZ.-*~ ";
     const std::string_view characters = heart_mode_ ? heart : normal;
-    if (pressed.left)
-        name_cursor_ = std::max(name_cursor_ - 1, 0);
-    if (pressed.right)
-        name_cursor_ = std::min(name_cursor_ + 1, 5);
-    if (pressed.up || pressed.down || (held.up && name_repeat_timer_ == 0) ||
-        (held.down && name_repeat_timer_ == 0)) {
+    bool cycle_up = pressed.up;
+    bool cycle_down = pressed.down;
+    if (cycle_up || cycle_down) {
+        name_repeat_timer_ = 9;
+    } else if (held.up || held.down) {
+        if (name_repeat_timer_ > 0)
+            --name_repeat_timer_;
+        if (name_repeat_timer_ == 0) {
+            name_repeat_timer_ = 9;
+            cycle_up = held.up;
+            cycle_down = !cycle_up && held.down;
+        }
+    } else {
+        name_repeat_timer_ = 0;
+    }
+    if (cycle_up || cycle_down) {
         std::size_t value = characters.find(pending_name_[static_cast<std::size_t>(name_cursor_)]);
         if (value == std::string_view::npos)
             value = 0;
-        value = pressed.up || held.up ? (value + characters.size() - 1) % characters.size()
-                                     : (value + 1) % characters.size();
+        value = cycle_up ? (value + 1) % characters.size()
+                         : (value + characters.size() - 1) % characters.size();
         pending_name_[static_cast<std::size_t>(name_cursor_)] = characters[value];
-        name_repeat_timer_ = 8;
+        high_scores_.name(*pending_score_, pending_name_);
     }
-    if (name_repeat_timer_ > 0)
-        --name_repeat_timer_;
-    if (++name_blink_timer_ == 8)
-        name_blink_timer_ = 0;
-    if (pressed.rotate_right && name_cursor_ < 5) {
+    if (pressed.rotate_left && name_cursor_ > 0) {
+        --name_cursor_;
+    } else if (pressed.rotate_right && name_cursor_ < 5) {
         ++name_cursor_;
+        if (static_cast<std::size_t>(name_cursor_) == pending_name_.size()) {
+            pending_name_.push_back('A');
+            high_scores_.name(*pending_score_, pending_name_);
+        }
     } else if (pressed.start || (pressed.rotate_right && name_cursor_ == 5)) {
         high_scores_.name(*pending_score_, pending_name_);
         pending_score_.reset();
@@ -344,10 +394,12 @@ void GameFlow::begin_name_entry(Screen after) {
         screen_ = after;
         return;
     }
-    pending_name_ = "AAAAAA";
+    pending_name_ = "A";
     name_cursor_ = 0;
     name_repeat_timer_ = 0;
     name_blink_timer_ = 0;
+    name_character_visible_ = true;
+    high_scores_.name(*pending_score_, pending_name_);
     screen_ = Screen::name_entry;
 }
 
@@ -389,8 +441,60 @@ VersusMatch& GameFlow::edit_versus() { return versus_; }
 int GameFlow::versus_height(int player) const { return versus_heights_[static_cast<std::size_t>(player)]; }
 int GameFlow::versus_result_step() const { return result_step_; }
 const HighScores& GameFlow::high_scores() const { return high_scores_; }
+void GameFlow::set_high_scores(HighScores scores) { high_scores_ = std::move(scores); }
 const std::string& GameFlow::pending_name() const { return pending_name_; }
 int GameFlow::name_cursor() const { return name_cursor_; }
+int GameFlow::name_entry_rank() const {
+    return pending_score_ ? static_cast<int>(pending_score_->rank) : -1;
+}
+bool GameFlow::name_character_visible() const { return name_character_visible_; }
+int GameFlow::game_over_curtain_rows() const {
+    return ending_stage_ == EndingStage::game_over_curtain
+               ? std::min(ending_elapsed_, board_height)
+               : 0;
+}
+int GameFlow::game_over_panel_rows() const {
+    if (screen_ != Screen::game_over || ending_stage_ == EndingStage::game_over_curtain)
+        return 0;
+    return std::min(ending_elapsed_, board_height);
+}
+bool GameFlow::launch_smoke_visible() const {
+    const bool ignition = ending_stage_ == EndingStage::rocket_ignition ||
+        ending_stage_ == EndingStage::rocket_liftoff_delay ||
+        ending_stage_ == EndingStage::rocket_liftoff ||
+        ending_stage_ == EndingStage::buran_ignition ||
+        ending_stage_ == EndingStage::buran_final_ignition ||
+        ending_stage_ == EndingStage::buran_liftoff;
+    return ignition && ((ending_elapsed_ / 10) & 1) == 0;
+}
+int GameFlow::exhaust_x() const { return screen_ == Screen::buran ? 0x4C : 0x54; }
+int GameFlow::exhaust_animation_frame() const {
+    if (ending_stage_ == EndingStage::rocket_rising)
+        return ((ending_elapsed_ + 3) / 6) & 1;
+    if (ending_stage_ == EndingStage::buran_rising)
+        return ((ending_elapsed_ + 5) / 6) & 1;
+    return 0;
+}
+int GameFlow::dancer_frame(int dancer) const {
+    constexpr std::array lengths = {28, 15, 30, 50, 32, 24, 38, 29, 40, 43};
+    if (dancer < 0 || dancer >= static_cast<int>(lengths.size()))
+        return 0;
+    return (std::max(ending_elapsed_ - 26, 0) /
+            lengths[static_cast<std::size_t>(dancer)]) & 1;
+}
+int GameFlow::dancer_vertical_offset(int dancer) const {
+    return dancer == 6 && dancer_frame(dancer) != 0 ? -10 : 0;
+}
+int GameFlow::versus_result_elapsed() const { return result_elapsed_; }
+bool GameFlow::versus_result_prompt_visible() const {
+    if (versus_.state() == MatchState::match_over ||
+        (screen_ != Screen::versus_round_result && screen_ != Screen::versus_match_result))
+        return false;
+    const bool local_victory = versus_.winner() != RoundWinner::player_two;
+    return local_victory ? result_step_ > 0 && result_step_ % 2 == 0
+                         : result_step_ % 2 == 1;
+}
+LineClearSpeed GameFlow::line_clear_speed() const { return line_clear_speed_; }
 
 void GameFlow::start_game_for_test(GameRules rules, const StartupRandom& random) {
     selected_type_ = rules.type;

@@ -25,7 +25,7 @@ int gameplay_song(Music music) {
 bool dangerous(const SinglePlayer& game) {
     for (int y = 0; y < 7; ++y) {
         for (int x = 0; x < board_width; ++x) {
-            if (game.board().at({x, y}) != 0)
+            if (game.board().at({x, y}) != Block::empty)
                 return true;
         }
     }

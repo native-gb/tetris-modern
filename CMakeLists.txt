@@ -47,6 +47,7 @@ add_library(tetris-game STATIC
     src/game/multiplayer.cpp
     src/game/piece.cpp
     src/game/randomizer.cpp
+    src/game/replay.cpp
     src/game/rules.cpp
     src/game/single_player.cpp
 )
@@ -109,9 +110,13 @@ if(TETRIS_BUILD_APP)
 
     add_executable(native-gb-tetris-modern
         src/app/app.cpp
+        src/app/controls_menu.cpp
         src/app/debug_ui.cpp
         src/app/main.cpp
+        src/app/persistence.cpp
+        src/presentation/endings.cpp
         src/presentation/renderer.cpp
+        src/presentation/ui.cpp
     )
     target_include_directories(native-gb-tetris-modern PRIVATE
         "${CMAKE_CURRENT_SOURCE_DIR}/src"
@@ -144,6 +149,14 @@ if(BUILD_TESTING)
     endif()
     tetris_target_defaults(tetris-content-tests)
     add_test(NAME tetris_content COMMAND tetris-content-tests)
+
+    add_executable(tetris-persistence-tests
+        tests/persistence_tests.cpp
+        src/app/persistence.cpp)
+    target_include_directories(tetris-persistence-tests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src")
+    target_link_libraries(tetris-persistence-tests PRIVATE tetris-game tetris-presentation)
+    tetris_target_defaults(tetris-persistence-tests)
+    add_test(NAME tetris_persistence COMMAND tetris-persistence-tests)
 
     if(TETRIS_BUILD_APP)
         add_executable(tetris-audio-tests tests/audio_tests.cpp)

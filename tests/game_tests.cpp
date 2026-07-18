@@ -36,15 +36,16 @@ void test_board() {
     expect(!board.occupied({4, -2}), "space above the board remains available");
 
     for (int column = 0; column < tetris::board_width; ++column)
-        board.set({column, 17}, 1);
-    board.set({3, 16}, 2);
+        board.set({column, 17}, tetris::Block::l);
+    board.set({3, 16}, tetris::Block::j);
     const auto rows = board.full_rows();
     expect(rows.size() == 1 && rows.front() == 17, "full rows are discovered semantically");
     board.remove_rows(rows);
-    expect(board.at({3, 17}) == 2, "row collapse moves surviving cells downward");
+    expect(board.at({3, 17}) == tetris::Block::j, "row collapse moves surviving cells downward");
 
-    board.add_garbage(2, 4, 3);
-    expect(board.at({4, 17}) == 0 && board.at({5, 17}) == 3,
+    board.add_garbage(2, 4, tetris::Block::garbage_3);
+    expect(board.at({4, 17}) == tetris::Block::empty &&
+           board.at({5, 17}) == tetris::Block::garbage_3,
            "garbage has one explicit hole");
 }
 
@@ -90,16 +91,16 @@ void test_single_player_clear() {
     game.start({}, startup_random(), fixed);
     for (int column = 0; column < board_width; ++column) {
         if (column < 3 || column > 6)
-            game.edit_board().set({column, 17}, 2);
+            game.edit_board().set({column, 17}, Block::j);
     }
     game.place_piece_for_test({.kind = PieceKind::I, .origin = {3, 15}});
     game.tick({.buttons = {.down = true}, .random = {}});
     game.tick({});
-    expect(game.state() == PlayState::flashing_lines, "a complete row enters line animation");
+    expect(game.state() == PlayState::resolving, "a complete row enters resolution delay");
     expect(game.lines() == 1, "Type A counts cleared rows upward");
     tick_until_falling(game);
     expect(game.score() == 40, "single at level zero awards forty points");
-    expect(game.board().at({0, 17}) == 0, "cleared row is removed");
+    expect(game.board().at({0, 17}) == Block::empty, "cleared row is removed");
 }
 
 void test_type_b_start() {
@@ -108,8 +109,8 @@ void test_type_b_start() {
     game.start({.type = GameType::type_b, .starting_level = 4, .type_b_height = 2},
                startup_random());
     expect(game.lines() == 25, "Type B begins with twenty-five remaining lines");
-    expect(game.board().at({0, 14}) != 0, "Type B height two creates four garbage rows");
-    expect(game.board().at({0, 13}) == 0, "garbage height does not spill upward");
+    expect(game.board().at({0, 14}) != Block::empty, "Type B height two creates four garbage rows");
+    expect(game.board().at({0, 13}) == Block::empty, "garbage height does not spill upward");
 }
 
 } // namespace

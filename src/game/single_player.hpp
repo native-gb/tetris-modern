@@ -14,10 +14,11 @@ namespace tetris {
 
 enum class PlayState {
     falling,
-    checking_lines,
-    flashing_lines,
-    waiting_to_collapse,
-    wiping_board,
+    locked,
+    resolving,
+    clearing,
+    collapse_pending,
+    wiping,
     game_over,
     complete,
 };
@@ -53,6 +54,8 @@ struct GameRules {
     int starting_level{};
     int type_b_height{};
     bool heart_mode{};
+
+    bool operator==(const GameRules&) const = default;
 };
 
 struct LineCounts {
@@ -80,7 +83,7 @@ struct StartupRandom {
 class SinglePlayer {
 public:
     void start(GameRules rules, const StartupRandom& random,
-               std::span<const PieceKind> fixed_pieces = {});
+               std::span<const PieceKind> fixed_pieces = {}, Buttons initial_buttons = {});
     void tick(const TickInput& input);
 
     void set_line_clear_speed(LineClearSpeed speed);
@@ -88,6 +91,7 @@ public:
     void add_garbage(int rows, int hole);
 
     const Board& board() const;
+    const Board& presentation_board() const;
     Board& edit_board();
     const FallingPiece& piece() const;
     PieceKind preview() const;
@@ -102,8 +106,13 @@ public:
     bool preview_visible() const;
     std::span<const int> clearing_rows() const;
     std::span<const Event> events() const;
+    void clear_events();
     int animation_step() const;
     std::uint64_t tick_count() const;
+    int gravity_frames() const;
+    int drop_timer() const;
+    int horizontal_repeat_timer() const;
+    std::size_t fixed_pieces_consumed() const;
 
     void place_piece_for_test(FallingPiece piece);
     void set_state_for_test(PlayState state);
@@ -115,15 +124,19 @@ private:
     bool try_move(Cell distance);
     bool collides(const FallingPiece& piece) const;
     void land();
-    void check_lines();
+    void detect_lines();
+    void advance_timers();
     void advance_animation(const RandomSamples& random);
+    void advance_wipe(const RandomSamples& random);
     void collapse_lines();
     void spawn(const RandomSamples& random);
+    void update_level();
     void lose();
     void emit(GameEvent event, int value = 0);
 
     GameRules rules_{};
     Board board_{};
+    Board wipe_board_{};
     FallingPiece piece_{};
     PieceKind preview_{PieceKind::L};
     PieceKind hidden_{PieceKind::L};
@@ -140,10 +153,11 @@ private:
     int gravity_frames_{52};
     int fall_timer_{52};
     int horizontal_repeat_timer_{23};
+    int delay_timer_{};
     int soft_drop_timer_{};
     int soft_drop_steps_{};
-    int animation_timer_{};
-    int animation_step_{};
+    int line_animation_step_{};
+    int wipe_step_{};
     std::uint64_t tick_count_{};
     int locks_at_spawn_{};
     bool score_clear_when_wiping_{};

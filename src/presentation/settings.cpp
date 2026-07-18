@@ -7,6 +7,8 @@
 namespace tetris::presentation {
 namespace {
 
+constexpr int current_schema = 1;
+
 bool parse_bool(std::string_view text, bool& value) {
     if (text == "true") {
         value = true;
@@ -24,6 +26,13 @@ bool parse_float(std::string_view text, float& value) {
     const char* end = begin + text.size();
     const auto result = std::from_chars(begin, end, value);
     return result.ec == std::errc{} && result.ptr == end && value >= 0.0F && value <= 1.0F;
+}
+
+bool parse_int(std::string_view text, int& value) {
+    const char* begin = text.data();
+    const char* end = begin + text.size();
+    const auto result = std::from_chars(begin, end, value);
+    return result.ec == std::errc{} && result.ptr == end;
 }
 
 bool parse(Settings& settings, std::string_view key, std::string_view value) {
@@ -102,6 +111,7 @@ bool load_settings(const std::filesystem::path& path, Settings& settings, std::s
     if (!input)
         return !std::filesystem::exists(path);
     Settings loaded;
+    int schema = 0;
     std::string line;
     int number = 0;
     while (std::getline(input, line)) {
@@ -109,9 +119,20 @@ bool load_settings(const std::filesystem::path& path, Settings& settings, std::s
         if (line.empty() || line.front() == '#')
             continue;
         const std::size_t separator = line.find('=');
-        if (separator == std::string::npos ||
-            !parse(loaded, std::string_view(line).substr(0, separator),
-                   std::string_view(line).substr(separator + 1))) {
+        if (separator == std::string::npos) {
+            error = "invalid setting on line " + std::to_string(number);
+            return false;
+        }
+        const std::string_view key = std::string_view(line).substr(0, separator);
+        const std::string_view value = std::string_view(line).substr(separator + 1);
+        if (key == "schema") {
+            if (!parse_int(value, schema) || schema < 0 || schema > current_schema) {
+                error = "unsupported settings schema on line " + std::to_string(number);
+                return false;
+            }
+            continue;
+        }
+        if (!parse(loaded, key, value)) {
             error = "invalid setting on line " + std::to_string(number);
             return false;
         }
@@ -128,7 +149,8 @@ bool save_settings(const std::filesystem::path& path, const Settings& settings, 
         error = "could not create settings file";
         return false;
     }
-    output << "preset=" << name(settings.preset) << '\n'
+    output << "schema=" << current_schema << '\n'
+           << "preset=" << name(settings.preset) << '\n'
            << "line_clear_speed=" << name(settings.line_clear_speed) << '\n'
            << "layout=" << name(settings.layout) << '\n'
            << "background=" << name(settings.background) << '\n'

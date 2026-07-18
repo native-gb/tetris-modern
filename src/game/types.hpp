@@ -6,7 +6,30 @@ namespace tetris {
 
 constexpr int board_width = 10;
 constexpr int board_height = 18;
-using Block = std::uint8_t;
+
+enum class Block : std::uint8_t {
+    empty,
+    l,
+    j,
+    o,
+    s,
+    z,
+    t,
+    i_horizontal_first,
+    i_horizontal_middle,
+    i_horizontal_last,
+    i_vertical_first,
+    i_vertical_middle,
+    i_vertical_last,
+    garbage_0,
+    garbage_1,
+    garbage_2,
+    garbage_3,
+    garbage_4,
+    garbage_5,
+    garbage_6,
+    garbage_7,
+};
 
 struct Cell {
     int x{};

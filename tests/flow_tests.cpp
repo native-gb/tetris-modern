@@ -1,7 +1,9 @@
 #include "game/flow.hpp"
+#include "game/replay.hpp"
 
 #include <array>
 #include <cstdio>
+#include <optional>
 
 namespace {
 
@@ -123,6 +125,42 @@ void test_high_scores() {
            "score names are six characters");
 }
 
+void test_replay_restores_flow_and_identity() {
+    tetris::GameFlow flow;
+    flow.start(resources());
+    reach_title(flow);
+
+    tetris::Replay replay;
+    std::uint8_t random_state = 17;
+    const tetris::ReplayIdentity identity{
+        .rom_sha1 = "74591cc9501af93873f9a5d3eb12da12c0723bbc",
+        .pacing = tetris::LineClearSpeed::fast,
+        .starting_screen = flow.screen(),
+        .rules = flow.game().rules(),
+    };
+    replay.begin_recording(flow, identity, random_state);
+    const std::array recorded = {
+        input({.start = true}), input(), input({.right = true}), input(),
+    };
+    for (const tetris::FlowInput& frame : recorded) {
+        flow.tick(frame);
+        ++random_state;
+        replay.append(frame, random_state);
+    }
+    replay.stop(random_state);
+    const tetris::Screen expected = flow.screen();
+
+    expect(replay.rewind(flow, random_state), "recorded replay rewinds");
+    expect(flow.screen() == tetris::Screen::title && random_state == 17,
+           "replay restores its exact initial flow and random state");
+    while (const std::optional<tetris::FlowInput> frame = replay.next(random_state))
+        flow.tick(*frame);
+    expect(flow.screen() == expected && random_state == 21,
+           "replay reproduces flow and restores continuation randomness");
+    expect(replay.identity() == identity,
+           "replay records ROM, pacing, screen, and rules identity");
+}
+
 } // namespace
 
 int main() {
@@ -130,6 +168,7 @@ int main() {
     test_heart_mode_and_reset();
     test_versus_height_controls();
     test_high_scores();
+    test_replay_restores_flow_and_identity();
     if (failures != 0)
         return 1;
     std::puts("modern Native Tetris flow tests passed");

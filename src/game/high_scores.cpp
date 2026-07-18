@@ -1,6 +1,7 @@
 #include "game/high_scores.hpp"
 
 #include <cassert>
+#include <utility>
 
 namespace tetris {
 namespace {
@@ -45,6 +46,18 @@ const HighScores::Table& HighScores::table(GameType type, int level, int height)
     return type == GameType::type_a
                ? type_a_[static_cast<std::size_t>(level)]
                : type_b_[table_index(level, height)];
+}
+
+bool HighScores::set_entry(GameType type, int level, int height, std::size_t rank,
+                           ScoreEntry entry) {
+    if (level < 0 || level > 9 || height < 0 || height > 5 || rank >= Table{}.size() ||
+        entry.score > 999'999 || entry.name.size() > 6)
+        return false;
+    Table& scores = type == GameType::type_a
+                        ? type_a_[static_cast<std::size_t>(level)]
+                        : type_b_[table_index(level, height)];
+    scores[rank] = std::move(entry);
+    return true;
 }
 
 } // namespace tetris

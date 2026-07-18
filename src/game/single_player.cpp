@@ -23,12 +23,9 @@ struct ClearTiming {
 
 ClearTiming timing_for(LineClearSpeed speed) {
     switch (speed) {
-    case LineClearSpeed::fast:
-        return {3, 5, 4};
-    case LineClearSpeed::instant:
-        return {1, 2, 1};
-    case LineClearSpeed::original:
-        return {10, 7, 13};
+    case LineClearSpeed::fast: return {3, 5, 4};
+    case LineClearSpeed::instant: return {1, 2, 1};
+    case LineClearSpeed::original: return {10, 7, 13};
     }
     return {10, 7, 13};
 }
@@ -36,56 +33,61 @@ ClearTiming timing_for(LineClearSpeed speed) {
 } // namespace
 
 void SinglePlayer::start(GameRules rules, const StartupRandom& random,
-                         std::span<const PieceKind> fixed_pieces) {
+                         std::span<const PieceKind> fixed_pieces, Buttons initial_buttons) {
     assert(rules.starting_level >= 0 && rules.starting_level <= 9);
     assert(rules.type_b_height >= 0 && rules.type_b_height <= 5);
 
     rules_ = rules;
     board_.clear();
+    wipe_board_.clear();
     piece_ = {};
     preview_ = PieceKind::L;
     hidden_ = PieceKind::L;
     state_ = PlayState::falling;
-    previous_buttons_ = {};
+    previous_buttons_ = initial_buttons;
     paused_ = false;
     preview_visible_ = true;
     require_fresh_down_press_ = false;
     level_ = rules.starting_level;
-    lines_ = rules.type == GameType::type_a ? 0 : (rules.type == GameType::type_b ? 25 : 30);
+    lines_ = rules.type == GameType::type_a ? 0 : rules.type == GameType::type_b ? 25 : 30;
     score_ = 0;
     soft_drop_points_ = 0;
     line_counts_ = {};
     gravity_frames_ = frames_per_drop(level_, rules.heart_mode);
     fall_timer_ = gravity_frames_;
     horizontal_repeat_timer_ = initial_repeat_delay;
+    delay_timer_ = 0;
     soft_drop_timer_ = 0;
     soft_drop_steps_ = 0;
-    animation_timer_ = 0;
-    animation_step_ = 0;
-    tick_count_ = 0;
+    line_animation_step_ = 0;
+    wipe_step_ = 0;
     locks_at_spawn_ = 0;
     score_clear_when_wiping_ = false;
     clearing_rows_.clear();
     fixed_pieces_.assign(fixed_pieces.begin(), fixed_pieces.end());
     next_fixed_piece_ = 0;
+    tick_count_ = 0;
     events_.clear();
 
     if (rules_.type == GameType::type_b) {
-        const int rows = rules_.type_b_height * 2;
-        int random_index = 0;
-        for (int row = board_height - rows; row < board_height; ++row) {
+        const int visible_rows = rules_.type_b_height * 2;
+        for (int source_row = 0; source_row < visible_rows; ++source_row) {
+            bool has_hole = false;
             for (int column = 0; column < board_width; ++column) {
-                const GarbageRandom sample = random.garbage[static_cast<std::size_t>(random_index)];
-                ++random_index;
-                if ((sample.occupancy & 3U) != 0U) {
-                    const auto block = static_cast<Block>((sample.appearance % 7U) + 1U);
-                    board_.set({column, row}, block);
+                const std::size_t index = static_cast<std::size_t>(source_row * board_width + column);
+                const GarbageRandom sample = random.garbage[index];
+                const bool occupied = (sample.occupancy & 1U) != 0;
+                if (!occupied || (column == board_width - 1 && !has_hole)) {
+                    has_hole = true;
+                    continue;
                 }
+                board_.set({column, board_height - visible_rows + source_row},
+                           garbage_block(sample.appearance));
             }
         }
     }
 
-    if (fixed_pieces_.size() >= 2) {
+    if (rules_.type == GameType::versus && fixed_pieces_.size() >= 2) {
         piece_ = {.kind = fixed_pieces_[0], .origin = spawn_origin};
         preview_ = fixed_pieces_[1];
         hidden_ = fixed_pieces_[1];
@@ -99,9 +101,9 @@ void SinglePlayer::start(GameRules rules, const StartupRandom& random,
 
 void SinglePlayer::tick(const TickInput& input) {
     events_.clear();
-    ++tick_count_;
     const Buttons pressed = newly_pressed(input.buttons, previous_buttons_);
     previous_buttons_ = input.buttons;
+    ++tick_count_;
 
     if (pressed.start)
         set_paused(!paused_);
@@ -109,41 +111,54 @@ void SinglePlayer::tick(const TickInput& input) {
         preview_visible_ = !preview_visible_;
         emit(GameEvent::preview_changed, preview_visible_ ? 1 : 0);
     }
-    if (paused_)
-        return;
 
-    if (soft_drop_timer_ > 0)
-        --soft_drop_timer_;
-    if (animation_timer_ > 0)
-        --animation_timer_;
-
-    switch (state_) {
-    case PlayState::falling:
-        rotate(pressed);
-        move_horizontally(input.buttons, pressed);
-        fall(input.buttons, pressed);
-        break;
-    case PlayState::checking_lines:
-        check_lines();
-        break;
-    case PlayState::flashing_lines:
-    case PlayState::waiting_to_collapse:
-    case PlayState::wiping_board:
-        advance_animation(input.random);
-        break;
-    case PlayState::game_over:
-    case PlayState::complete:
-        break;
+    if (!paused_) {
+        const PlayState state_at_start = state_;
+        if (state_at_start != PlayState::falling && fall_timer_ > 0)
+            --fall_timer_;
+        switch (state_) {
+        case PlayState::falling:
+            rotate(pressed);
+            move_horizontally(input.buttons, pressed);
+            fall(input.buttons, pressed);
+            break;
+        case PlayState::locked:
+            detect_lines();
+            break;
+        case PlayState::collapse_pending:
+            if (delay_timer_ == 0)
+                collapse_lines();
+            break;
+        case PlayState::wiping:
+            if (wipe_step_ == 5 && score_clear_when_wiping_) {
+                if (rules_.type == GameType::type_a) {
+                    score_ = std::min(maximum_score,
+                        score_ + line_clear_score(static_cast<int>(clearing_rows_.size()), level_));
+                    emit(GameEvent::score_changed, static_cast<int>(score_));
+                }
+                score_clear_when_wiping_ = false;
+            }
+            break;
+        case PlayState::resolving:
+        case PlayState::clearing:
+        case PlayState::game_over:
+        case PlayState::complete:
+            break;
+        }
     }
+
+    advance_timers();
+    if (!paused_)
+        advance_animation(input.random);
 }
 
 void SinglePlayer::rotate(const Buttons& pressed) {
     if (!pressed.rotate_left && !pressed.rotate_right)
         return;
-    const Rotation old = piece_.rotation;
-    piece_.rotation = pressed.rotate_left ? counterclockwise(old) : clockwise(old);
+    const Rotation previous = piece_.rotation;
+    piece_.rotation = pressed.rotate_left ? counterclockwise(previous) : clockwise(previous);
     if (collides(piece_)) {
-        piece_.rotation = old;
+        piece_.rotation = previous;
         return;
     }
     emit(GameEvent::rotated, static_cast<int>(piece_.rotation));
@@ -156,7 +171,7 @@ void SinglePlayer::move_horizontally(const Buttons& held, const Buttons& pressed
         direction = 1;
     } else if (held.right) {
         --horizontal_repeat_timer_;
-        if (horizontal_repeat_timer_ <= 0) {
+        if (horizontal_repeat_timer_ == 0) {
             horizontal_repeat_timer_ = repeat_delay;
             direction = 1;
         }
@@ -165,14 +180,13 @@ void SinglePlayer::move_horizontally(const Buttons& held, const Buttons& pressed
         direction = -1;
     } else if (held.left) {
         --horizontal_repeat_timer_;
-        if (horizontal_repeat_timer_ <= 0) {
+        if (horizontal_repeat_timer_ == 0) {
             horizontal_repeat_timer_ = repeat_delay;
             direction = -1;
         }
     } else {
         horizontal_repeat_timer_ = initial_repeat_delay;
     }
-
     if (direction != 0 && !try_move({direction, 0}))
         horizontal_repeat_timer_ = 1;
 }
@@ -191,12 +205,11 @@ void SinglePlayer::fall(const Buttons& held, const Buttons& pressed) {
         ++soft_drop_steps_;
         if (try_move({0, 1}))
             return;
-        const auto earned = static_cast<std::uint32_t>(std::max(soft_drop_steps_ - 1, 0));
+        const std::uint32_t earned = static_cast<std::uint32_t>(std::max(soft_drop_steps_ - 1, 0));
         soft_drop_points_ += earned;
-        if (rules_.type == GameType::type_a) {
+        if (rules_.type == GameType::type_a && earned != 0) {
             score_ = std::min(maximum_score, score_ + earned);
-            if (earned != 0)
-                emit(GameEvent::score_changed, static_cast<int>(score_));
+            emit(GameEvent::score_changed, static_cast<int>(score_));
         }
         soft_drop_steps_ = 0;
         land();
@@ -204,15 +217,17 @@ void SinglePlayer::fall(const Buttons& held, const Buttons& pressed) {
     }
     if (soft_drop)
         return;
-
-    soft_drop_steps_ = 0;
+    if (!down_only)
+        soft_drop_steps_ = 0;
     if (fall_timer_ > 0) {
         --fall_timer_;
         return;
     }
     fall_timer_ = gravity_frames_;
-    if (!try_move({0, 1}))
+    if (!try_move({0, 1})) {
+        soft_drop_steps_ = 0;
         land();
+    }
 }
 
 bool SinglePlayer::try_move(Cell distance) {
@@ -222,7 +237,7 @@ bool SinglePlayer::try_move(Cell distance) {
     if (collides(moved))
         return false;
     piece_ = moved;
-    emit(GameEvent::moved, distance.x);
+    emit(GameEvent::moved, distance.y == 0 ? distance.x : 0);
     return true;
 }
 
@@ -236,122 +251,128 @@ bool SinglePlayer::collides(const FallingPiece& piece) const {
 
 void SinglePlayer::land() {
     const bool at_spawn = piece_.origin == spawn_origin;
-    for (const Cell cell : occupied_cells(piece_)) {
+    const auto cells = occupied_cells(piece_);
+    const auto blocks = blocks_for(piece_);
+    for (std::size_t index = 0; index < cells.size(); ++index) {
+        const Cell cell = cells[index];
         if (cell.y >= 0 && cell.x >= 0 && cell.x < board_width && cell.y < board_height)
-            board_.set(cell, block_for(piece_.kind));
+            board_.set(cell, blocks[index]);
     }
     require_fresh_down_press_ = true;
-    state_ = PlayState::checking_lines;
+    state_ = PlayState::locked;
     emit(GameEvent::landed, static_cast<int>(piece_.kind));
-    if (at_spawn) {
-        ++locks_at_spawn_;
-        if (locks_at_spawn_ >= 2)
-            lose();
-    }
+    if (at_spawn && ++locks_at_spawn_ >= 2)
+        lose();
 }
 
-void SinglePlayer::check_lines() {
+void SinglePlayer::detect_lines() {
     clearing_rows_ = board_.full_rows();
     const int cleared = static_cast<int>(clearing_rows_.size());
-    if (cleared == 0) {
-        animation_timer_ = 2;
-        state_ = PlayState::waiting_to_collapse;
-        return;
+    if (cleared > 0) {
+        if (rules_.type == GameType::type_a)
+            lines_ = std::min(lines_ + cleared, 9'999);
+        else
+            lines_ = std::max(lines_ - cleared, 0);
+        if (cleared == 1) ++line_counts_.singles;
+        else if (cleared == 2) ++line_counts_.doubles;
+        else if (cleared == 3) ++line_counts_.triples;
+        else if (cleared == 4) ++line_counts_.tetrises;
+        score_clear_when_wiping_ = true;
+        emit(GameEvent::cleared_lines, cleared);
     }
+    state_ = PlayState::resolving;
+    delay_timer_ = 3;
+}
 
-    if (rules_.type == GameType::type_a)
-        lines_ = std::min(lines_ + cleared, 9'999);
-    else
-        lines_ = std::max(lines_ - cleared, 0);
-    if (cleared == 1)
-        ++line_counts_.singles;
-    else if (cleared == 2)
-        ++line_counts_.doubles;
-    else if (cleared == 3)
-        ++line_counts_.triples;
-    else if (cleared == 4)
-        ++line_counts_.tetrises;
-    score_clear_when_wiping_ = true;
-    emit(GameEvent::cleared_lines, cleared);
-    state_ = PlayState::flashing_lines;
-    animation_step_ = 1;
-    animation_timer_ = timing_for(line_clear_speed_).flash_delay;
+void SinglePlayer::advance_timers() {
+    if (delay_timer_ > 0)
+        --delay_timer_;
+    if (soft_drop_timer_ > 0)
+        --soft_drop_timer_;
 }
 
 void SinglePlayer::advance_animation(const RandomSamples& random) {
-    if (animation_timer_ > 0)
-        return;
-
-    if (state_ == PlayState::flashing_lines) {
-        ++animation_step_;
-        const ClearTiming timing = timing_for(line_clear_speed_);
-        if (animation_step_ < timing.flashes) {
-            animation_timer_ = timing.flash_delay;
-            return;
-        }
-        state_ = PlayState::waiting_to_collapse;
-        animation_timer_ = timing.collapse_delay;
-        return;
-    }
-
-    if (state_ == PlayState::waiting_to_collapse) {
+    const ClearTiming timing = timing_for(line_clear_speed_);
+    if (state_ == PlayState::resolving && delay_timer_ == 0) {
         if (clearing_rows_.empty()) {
             spawn(random);
+            --fall_timer_;
             return;
         }
-        collapse_lines();
+        state_ = PlayState::clearing;
+        line_animation_step_ = 1;
+        delay_timer_ = timing.flash_delay;
         return;
     }
-
-    if (state_ == PlayState::wiping_board) {
-        ++animation_step_;
-        if (animation_step_ == 5 && score_clear_when_wiping_) {
-            if (rules_.type == GameType::type_a) {
-                score_ = std::min(maximum_score,
-                                  score_ + line_clear_score(static_cast<int>(clearing_rows_.size()), level_));
-                emit(GameEvent::score_changed, static_cast<int>(score_));
-            }
-            score_clear_when_wiping_ = false;
+    if (state_ == PlayState::clearing && delay_timer_ == 0) {
+        ++line_animation_step_;
+        if (line_animation_step_ >= timing.flashes) {
+            line_animation_step_ = 0;
+            state_ = PlayState::collapse_pending;
+            delay_timer_ = timing.collapse_delay;
+        } else {
+            delay_timer_ = timing.flash_delay;
         }
-        if (animation_step_ == 16 && rules_.type == GameType::type_a && level_ < 20) {
-            const int next = std::min(std::max(rules_.starting_level, lines_ / 10), 20);
-            if (next > level_) {
-                level_ = next;
-                gravity_frames_ = frames_per_drop(level_, rules_.heart_mode);
-                emit(GameEvent::level_changed, level_);
-            }
-        }
-        if (animation_step_ < 19)
-            return;
-        if (rules_.type != GameType::type_a && lines_ == 0) {
-            if (rules_.type == GameType::type_b) {
-                const std::uint32_t clear_score =
-                    line_counts_.singles * line_clear_score(1, level_) +
-                    line_counts_.doubles * line_clear_score(2, level_) +
-                    line_counts_.triples * line_clear_score(3, level_) +
-                    line_counts_.tetrises * line_clear_score(4, level_);
-                score_ = std::min(maximum_score, clear_score + soft_drop_points_);
-                emit(GameEvent::score_changed, static_cast<int>(score_));
-            }
-            state_ = PlayState::complete;
-            emit(GameEvent::complete);
-            return;
-        }
-        spawn(random);
+        return;
     }
+    if (state_ == PlayState::wiping)
+        advance_wipe(random);
 }
 
 void SinglePlayer::collapse_lines() {
+    wipe_board_ = board_;
     board_.remove_rows(clearing_rows_);
-    state_ = PlayState::wiping_board;
-    animation_step_ = 2;
+    state_ = PlayState::wiping;
+    wipe_step_ = 2;
+}
+
+void SinglePlayer::advance_wipe(const RandomSamples& random) {
+    const int display_row = 19 - wipe_step_;
+    if (display_row >= 0 && display_row < board_height) {
+        for (int column = 0; column < board_width; ++column)
+            wipe_board_.set({column, display_row}, board_.at({column, display_row}));
+    }
+    if (wipe_step_ == 16)
+        update_level();
+    if (wipe_step_ < 19) {
+        ++wipe_step_;
+        return;
+    }
+
+    wipe_step_ = 0;
+    if (rules_.type != GameType::type_a && lines_ == 0) {
+        if (rules_.type == GameType::type_b) {
+            const std::uint32_t line_score =
+                line_counts_.singles * line_clear_score(1, level_) +
+                line_counts_.doubles * line_clear_score(2, level_) +
+                line_counts_.triples * line_clear_score(3, level_) +
+                line_counts_.tetrises * line_clear_score(4, level_);
+            score_ = std::min(maximum_score, line_score + soft_drop_points_);
+            emit(GameEvent::score_changed, static_cast<int>(score_));
+        }
+        state_ = PlayState::complete;
+        emit(GameEvent::complete);
+        return;
+    }
+    spawn(random);
+    --fall_timer_;
+}
+
+void SinglePlayer::update_level() {
+    if (rules_.type != GameType::type_a || level_ >= 20)
+        return;
+    const int next = std::min(std::max(rules_.starting_level, lines_ / 10), 20);
+    if (next <= level_)
+        return;
+    level_ = next;
+    gravity_frames_ = frames_per_drop(level_, rules_.heart_mode);
+    emit(GameEvent::level_changed, level_);
 }
 
 void SinglePlayer::spawn(const RandomSamples& random) {
     PieceKind active = preview_;
     if (next_fixed_piece_ < fixed_pieces_.size()) {
-        preview_ = fixed_pieces_[next_fixed_piece_];
-        ++next_fixed_piece_;
+        preview_ = fixed_pieces_[next_fixed_piece_++];
     } else {
         const PieceQueue queue = advance_piece_queue(preview_, hidden_, random);
         active = queue.active;
@@ -370,10 +391,7 @@ void SinglePlayer::lose() {
     emit(GameEvent::game_over);
 }
 
-void SinglePlayer::emit(GameEvent event, int value) {
-    events_.push_back({event, value});
-}
-
+void SinglePlayer::emit(GameEvent event, int value) { events_.push_back({event, value}); }
 void SinglePlayer::set_line_clear_speed(LineClearSpeed speed) { line_clear_speed_ = speed; }
 void SinglePlayer::set_paused(bool paused) {
     if (paused_ == paused)
@@ -384,12 +402,16 @@ void SinglePlayer::set_paused(bool paused) {
 void SinglePlayer::add_garbage(int rows, int hole) {
     if (state_ != PlayState::falling)
         return;
-    board_.add_garbage(rows, hole, 1);
+    board_.add_garbage(rows, hole);
     emit(GameEvent::garbage_applied, rows);
     if (collides(piece_))
         lose();
 }
+
 const Board& SinglePlayer::board() const { return board_; }
+const Board& SinglePlayer::presentation_board() const {
+    return state_ == PlayState::wiping ? wipe_board_ : board_;
+}
 Board& SinglePlayer::edit_board() { return board_; }
 const FallingPiece& SinglePlayer::piece() const { return piece_; }
 PieceKind SinglePlayer::preview() const { return preview_; }
@@ -404,9 +426,16 @@ bool SinglePlayer::paused() const { return paused_; }
 bool SinglePlayer::preview_visible() const { return preview_visible_; }
 std::span<const int> SinglePlayer::clearing_rows() const { return clearing_rows_; }
 std::span<const Event> SinglePlayer::events() const { return events_; }
-int SinglePlayer::animation_step() const { return animation_step_; }
+void SinglePlayer::clear_events() { events_.clear(); }
+int SinglePlayer::animation_step() const {
+    return state_ == PlayState::wiping ? wipe_step_ : line_animation_step_;
+}
 std::uint64_t SinglePlayer::tick_count() const { return tick_count_; }
-void SinglePlayer::place_piece_for_test(FallingPiece piece) { piece_ = piece; }
+int SinglePlayer::gravity_frames() const { return gravity_frames_; }
+int SinglePlayer::drop_timer() const { return fall_timer_; }
+int SinglePlayer::horizontal_repeat_timer() const { return horizontal_repeat_timer_; }
+std::size_t SinglePlayer::fixed_pieces_consumed() const { return next_fixed_piece_; }
+void SinglePlayer::place_piece_for_test(FallingPiece piece) { piece_ = piece; state_ = PlayState::falling; }
 void SinglePlayer::set_state_for_test(PlayState state) { state_ = state; }
 
 } // namespace tetris

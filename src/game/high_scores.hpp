@@ -13,6 +13,8 @@ namespace tetris {
 struct ScoreEntry {
     std::uint32_t score{};
     std::string name;
+
+    bool operator==(const ScoreEntry&) const = default;
 };
 
 struct ScorePosition {
@@ -30,6 +32,7 @@ public:
                                         std::uint32_t score);
     void name(const ScorePosition& position, std::string name);
     const Table& table(GameType type, int level, int height) const;
+    bool set_entry(GameType type, int level, int height, std::size_t rank, ScoreEntry entry);
 
 private:
     std::array<Table, 10> type_a_{};

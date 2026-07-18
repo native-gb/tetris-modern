@@ -1,8 +1,11 @@
 #include "app/app.hpp"
 
+#include "app/controls_menu.hpp"
 #include "app/debug_ui.hpp"
+#include "app/persistence.hpp"
 #include "audio/output.hpp"
 #include "game/flow.hpp"
+#include "game/replay.hpp"
 #include "presentation/effects.hpp"
 #include "presentation/renderer.hpp"
 #include "presentation/settings.hpp"
@@ -18,7 +21,7 @@
 #include <cstdio>
 #include <filesystem>
 #include <optional>
-#include <vector>
+#include <utility>
 
 namespace tetris::app {
 namespace {
@@ -32,21 +35,12 @@ enum class Action : int {
     left = 1, right, up, down, rotate_left, rotate_right, start, select, quit,
 };
 
-struct Replay {
-    std::optional<GameFlow> initial;
-    std::vector<FlowInput> inputs;
-    std::size_t position{};
-    std::uint8_t divider{};
-    std::uint8_t final_divider{};
-    bool recording{};
-    bool playing{};
-};
-
 struct State {
     GameFlow flow;
     presentation::Settings settings;
     presentation::EffectState effects;
     DebugUi debug;
+    ControlsMenu controls;
     Replay replay;
     audio::Output audio;
     std::uint8_t divider{1};
@@ -117,7 +111,11 @@ bool register_controls(GubsyRuntime& runtime) {
     bind(two, GubsyButton::KB_P, Action::start); bind(two, GubsyButton::KB_Y, Action::select);
     bind_gamepad(two);
 
-    if (!gubsy_replace_binds_profile(runtime, one) || !gubsy_replace_binds_profile(runtime, two))
+    if (gubsy_find_binds_profile(runtime, one.id) == nullptr &&
+        !gubsy_replace_binds_profile(runtime, one))
+        return false;
+    if (gubsy_find_binds_profile(runtime, two.id) == nullptr &&
+        !gubsy_replace_binds_profile(runtime, two))
         return false;
     const int second = gubsy_add_lobby_local_player(runtime);
     return second == 1 &&
@@ -125,14 +123,44 @@ bool register_controls(GubsyRuntime& runtime) {
            gubsy_set_lobby_player_binds_profile(runtime, 1, two.id);
 }
 
-void assign_gamepads(GubsyRuntime& runtime) {
+bool has_gamepad(const GubsyLobbyPlayer& player) {
+    return std::any_of(player.devices.begin(), player.devices.end(),
+                       [](GubsyLobbyDeviceAssignment device) {
+                           return device.type == InputSourceType::Gamepad;
+                       });
+}
+
+bool assigned(const GubsyLobbyState& lobby, int device_id) {
+    for (const GubsyLobbyPlayer& player : lobby.local_players) {
+        const bool found = std::any_of(
+            player.devices.begin(), player.devices.end(),
+            [device_id](GubsyLobbyDeviceAssignment device) {
+                return device.type == InputSourceType::Gamepad && device.device_id == device_id;
+            });
+        if (found)
+            return true;
+    }
+    return false;
+}
+
+void assign_unclaimed_gamepads(GubsyRuntime& runtime) {
     int count = 0;
     SDL_JoystickID* gamepads = SDL_GetGamepads(&count);
     if (gamepads == nullptr)
         return;
-    for (int index = 0; index < std::min(count, 2); ++index) {
-        gubsy_toggle_lobby_player_device(runtime, index,
-            GubsyLobbyDeviceAssignment{InputSourceType::Gamepad, static_cast<int>(gamepads[index])});
+    for (int index = 0; index < count; ++index) {
+        const int device_id = static_cast<int>(gamepads[index]);
+        const GubsyLobbyState& lobby = gubsy_get_lobby_state(runtime);
+        if (assigned(lobby, device_id))
+            continue;
+        for (int player = 0; player < static_cast<int>(lobby.local_players.size()); ++player) {
+            if (has_gamepad(lobby.local_players[static_cast<std::size_t>(player)]))
+                continue;
+            gubsy_toggle_lobby_player_device(
+                runtime, player,
+                GubsyLobbyDeviceAssignment{InputSourceType::Gamepad, device_id});
+            break;
+        }
     }
     SDL_free(gamepads);
 }
@@ -177,47 +205,36 @@ void initialize(State& state, const content::Catalog& content) {
     state.effects = {};
 }
 
-void process_replay(State& state) {
+void process_replay(State& state, const std::string& rom_sha1) {
     const ReplayRequest request = state.debug.replay_request;
     state.debug.replay_request = ReplayRequest::none;
     if (request == ReplayRequest::record) {
-        state.replay.initial = state.flow;
-        state.replay.inputs.clear();
-        state.replay.position = 0;
-        state.replay.divider = state.divider;
-        state.replay.recording = true;
-        state.replay.playing = false;
+        state.replay.begin_recording(
+            state.flow,
+            ReplayIdentity{.rom_sha1 = rom_sha1,
+                           .pacing = state.flow.line_clear_speed(),
+                           .starting_screen = state.flow.screen(),
+                           .rules = state.flow.game().rules()},
+            state.divider);
     } else if (request == ReplayRequest::stop) {
-        state.replay.recording = false;
-        state.replay.playing = false;
-        state.replay.final_divider = state.divider;
-    } else if (request == ReplayRequest::play && state.replay.initial && !state.replay.inputs.empty()) {
-        state.flow = *state.replay.initial;
-        state.divider = state.replay.divider;
-        state.replay.position = 0;
-        state.replay.recording = false;
-        state.replay.playing = true;
+        state.replay.stop(state.divider);
+    } else if (request == ReplayRequest::play) {
+        (void)state.replay.rewind(state.flow, state.divider);
     } else if (request == ReplayRequest::clear) {
-        state.replay = {};
+        state.replay.clear();
     }
 }
 
 void step(State& state, Buttons one, Buttons two) {
-    if (state.replay.playing) {
-        if (state.replay.position == state.replay.inputs.size()) {
-            state.replay.playing = false;
-            state.divider = state.replay.final_divider;
+    if (state.replay.playing()) {
+        const std::optional<FlowInput> input = state.replay.next(state.divider);
+        if (!input)
             return;
-        }
-        state.flow.tick(state.replay.inputs[state.replay.position++]);
+        state.flow.tick(*input);
     } else {
         FlowInput input = make_input(state, one, two);
         state.flow.tick(input);
-        if (state.replay.recording) {
-            state.replay.inputs.push_back(input);
-            state.replay.position = state.replay.inputs.size();
-            state.replay.final_divider = state.divider;
-        }
+        state.replay.append(std::move(input), state.divider);
     }
     presentation::advance(state.effects, state.flow.game().events(), state.settings);
     state.audio.tick(state.flow, state.divider);
@@ -265,7 +282,7 @@ int run(const content::Rom& rom, const content::Catalog& content, int frame_limi
         return 1;
     }
     ImGui::GetIO().ConfigFlags &= ~ImGuiConfigFlags_NavEnableGamepad;
-    assign_gamepads(runtime);
+    assign_unclaimed_gamepads(runtime);
 
     presentation::Renderer video;
     if (!video.initialize(frame.renderer, content)) {
@@ -281,6 +298,14 @@ int run(const content::Rom& rom, const content::Catalog& content, int frame_limi
     const std::filesystem::path settings_path = data_root / "enhancements.cfg";
     (void)presentation::load_settings(settings_path, state.settings, settings_error);
     initialize(state, content);
+    std::string high_score_error;
+    const std::filesystem::path high_score_path = data_root / "high-scores.txt";
+    HighScores high_scores;
+    if (load_high_scores(high_score_path, high_scores, high_score_error)) {
+        state.flow.set_high_scores(std::move(high_scores));
+    } else {
+        std::fprintf(stderr, "could not load high scores: %s\n", high_score_error.c_str());
+    }
     if (!state.audio.initialize(content.audio))
         std::fprintf(stderr, "audio output unavailable: %s\n", SDL_GetError());
     state.audio.set_volume(state.settings.music_volume, state.settings.effects_volume);
@@ -294,33 +319,47 @@ int run(const content::Rom& rom, const content::Catalog& content, int frame_limi
         SDL_Event event;
         while (SDL_PollEvent(&event)) {
             gubsy_process_sdl_event(runtime, event);
+            if (event.type == SDL_EVENT_GAMEPAD_ADDED)
+                assign_unclaimed_gamepads(runtime);
             if (event.type == SDL_EVENT_QUIT)
                 running = false;
             if (event.type == SDL_EVENT_KEY_DOWN && !event.key.repeat && event.key.key == SDLK_F1)
                 state.debug.visible = !state.debug.visible;
+            if (event.type == SDL_EVENT_KEY_DOWN && !event.key.repeat && event.key.key == SDLK_F2)
+                (void)state.controls.open(runtime);
             if (event.type == SDL_EVENT_KEY_DOWN && !event.key.repeat && event.key.key == SDLK_F11) {
                 const bool fullscreen = (SDL_GetWindowFlags(frame.window) & SDL_WINDOW_FULLSCREEN) != 0;
                 (void)SDL_SetWindowFullscreen(frame.window, !fullscreen);
             }
         }
         imgui_new_frame();
+        const std::uint64_t now = SDL_GetTicksNS();
+        const double elapsed = std::clamp(
+            static_cast<double>(now - previous_time) / 1.0e9, 0.0, 0.25);
+        previous_time = now;
+        accumulator += elapsed;
         gubsy_update_device_state(runtime);
         Buttons one = read_buttons(runtime, 0);
         Buttons two = read_buttons(runtime, 1);
-        if (down(runtime, 0, Action::quit))
+        if (state.controls.chord_pressed(one))
+            (void)state.controls.open(runtime);
+        if (state.debug.open_controls) {
+            (void)state.controls.open(runtime);
+            state.debug.open_controls = false;
+        }
+        const bool editing_controls = state.controls.is_open(runtime);
+        state.controls.update(runtime, one, static_cast<float>(elapsed), frame.render_width,
+                              frame.render_height);
+        if (down(runtime, 0, Action::quit) && !editing_controls)
             running = false;
         if (imgui_want_capture_keyboard()) {
             one = {};
             two = {};
         }
 
-        process_replay(state);
-        const std::uint64_t now = SDL_GetTicksNS();
-        const double elapsed = std::clamp(static_cast<double>(now - previous_time) / 1.0e9, 0.0, 0.25);
-        previous_time = now;
-        accumulator += elapsed;
+        process_replay(state, rom.digest);
         while (accumulator >= fixed_step) {
-            if (!state.debug.paused || state.debug.step) {
+            if ((!state.debug.paused || state.debug.step) && !editing_controls) {
                 step(state, one, two);
                 state.debug.step = false;
             }
@@ -331,10 +370,11 @@ int run(const content::Rom& rom, const content::Catalog& content, int frame_limi
         frame = gubsy_get_frame(runtime);
         video.draw(frame.renderer, frame, content, state.flow, state.settings,
                    state.effects, state.debug.view);
-        state.debug.replay_recording = state.replay.recording;
-        state.debug.replay_playing = state.replay.playing;
-        state.debug.replay_position = state.replay.position;
-        state.debug.replay_size = state.replay.inputs.size();
+        state.controls.draw(runtime, frame.renderer, frame.render_width, frame.render_height);
+        state.debug.replay_recording = state.replay.recording();
+        state.debug.replay_playing = state.replay.playing();
+        state.debug.replay_position = state.replay.position();
+        state.debug.replay_size = state.replay.size();
         if (draw_debug_ui(state.debug, state.flow, state.settings, content, state.audio)) {
             state.flow.set_line_clear_speed(state.settings.line_clear_speed);
             state.audio.set_volume(state.settings.music_volume, state.settings.effects_volume);
@@ -349,6 +389,8 @@ int run(const content::Rom& rom, const content::Catalog& content, int frame_limi
             running = false;
     }
     video.shutdown();
+    if (!save_high_scores(high_score_path, state.flow.high_scores(), high_score_error))
+        std::fprintf(stderr, "could not save high scores: %s\n", high_score_error.c_str());
     state.audio.shutdown();
     shutdown_imgui_layer();
     return 0;

@@ -22,6 +22,7 @@ struct DebugUi {
     bool replay_window{};
     bool settings_window{true};
     bool audio_window{};
+    bool open_controls{};
     bool paused{};
     bool step{};
     ReplayRequest replay_request{ReplayRequest::none};

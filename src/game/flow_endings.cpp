@@ -234,7 +234,7 @@ void GameFlow::tick_ending(const Buttons& pressed) {
             ++displayed;
             scoreboard_.score = std::min<std::uint32_t>(
                 999'999, scoreboard_.score + line_clear_score(category + 1, game_.level()));
-            timer_ = 2;
+            timer_ = 5;
         } else if (category < 3) {
             ++scoreboard_.category;
             timer_ = scoreboard_category_frames;

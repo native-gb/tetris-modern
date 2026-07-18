@@ -117,8 +117,21 @@ public:
     int versus_height(int player) const;
     int versus_result_step() const;
     const HighScores& high_scores() const;
+    void set_high_scores(HighScores scores);
     const std::string& pending_name() const;
     int name_cursor() const;
+    int name_entry_rank() const;
+    bool name_character_visible() const;
+    int game_over_curtain_rows() const;
+    int game_over_panel_rows() const;
+    bool launch_smoke_visible() const;
+    int exhaust_x() const;
+    int exhaust_animation_frame() const;
+    int dancer_frame(int dancer) const;
+    int dancer_vertical_offset(int dancer) const;
+    int versus_result_elapsed() const;
+    bool versus_result_prompt_visible() const;
+    LineClearSpeed line_clear_speed() const;
 
     void start_game_for_test(GameRules rules, const StartupRandom& random);
 
@@ -162,6 +175,7 @@ private:
     bool new_match_{true};
     int result_timer_{};
     int result_step_{};
+    int result_elapsed_{};
     EndingStage ending_stage_{EndingStage::none};
     int ending_elapsed_{};
     Rocket rocket_{Rocket::small};
@@ -177,6 +191,7 @@ private:
     int name_cursor_{};
     int name_repeat_timer_{};
     int name_blink_timer_{};
+    bool name_character_visible_{true};
     Screen after_name_entry_{Screen::type_a_level};
 };
 

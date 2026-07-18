@@ -1,4 +1,7 @@
 #include "presentation/renderer.hpp"
+#include "presentation/drawing.hpp"
+#include "presentation/endings.hpp"
+#include "presentation/ui.hpp"
 
 #include <algorithm>
 #include <array>
@@ -7,21 +10,13 @@
 #include <string_view>
 
 namespace tetris::presentation {
-namespace {
+namespace drawing {
 
 constexpr int atlas_columns = 16;
 constexpr std::array<SDL_Color, 4> palette = {{
     {224, 239, 207, 255}, {155, 181, 139, 255},
     {75, 105, 73, 255}, {22, 36, 28, 255},
 }};
-
-enum class Bank { gameplay, title, multiplayer };
-
-struct Placement {
-    float x{};
-    float y{};
-    float tile{};
-};
 
 struct SelectedTile {
     const Renderer::Atlas* atlas{};
@@ -101,9 +96,9 @@ Placement centered(const GubsyFrame& frame, Offset offset) {
     };
 }
 
-const char* map_for(Screen screen, const SinglePlayer& game, Bank& bank) {
+const char* map_for(const GameFlow& flow, Bank& bank) {
     bank = Bank::gameplay;
-    switch (screen) {
+    switch (flow.screen()) {
     case Screen::copyright_fixed:
     case Screen::copyright_skippable: bank = Bank::title; return "copyright";
     case Screen::title: bank = Bank::title; return "title";
@@ -112,7 +107,9 @@ const char* map_for(Screen screen, const SinglePlayer& game, Bank& bank) {
     case Screen::type_a_level: return "type-a-difficulty";
     case Screen::type_b_level:
     case Screen::type_b_height:
-    case Screen::name_entry: return "type-b-difficulty";
+    case Screen::name_entry:
+        return flow.selected_type() == GameType::type_a ? "type-a-difficulty"
+                                                        : "type-b-difficulty";
     case Screen::versus_height: bank = Bank::multiplayer; return "multiplayer-difficulty";
     case Screen::versus_gameplay: bank = Bank::multiplayer; return "multiplayer-gameplay";
     case Screen::gameplay:
@@ -121,7 +118,8 @@ const char* map_for(Screen screen, const SinglePlayer& game, Bank& bank) {
     case Screen::type_b_celebration:
     case Screen::dancers:
     case Screen::scoreboard:
-        return game.rules().type == GameType::type_b ? "type-b-gameplay" : "type-a-gameplay";
+        return flow.game().rules().type == GameType::type_b ? "type-b-gameplay"
+                                                            : "type-a-gameplay";
     default: return nullptr;
     }
 }
@@ -143,7 +141,7 @@ void draw_texture_tile(SDL_Renderer* renderer, const Renderer::Atlas& atlas, int
 
 void draw_tile(SDL_Renderer* renderer, const Renderer& video, Bank bank,
                std::uint8_t id, const Placement& placement, float column, float row,
-               bool sprite = false, bool flip = false) {
+               bool sprite, bool flip) {
     const SelectedTile tile = select(video, bank, id);
     if (tile.atlas == nullptr)
         return;
@@ -155,7 +153,7 @@ void draw_tile(SDL_Renderer* renderer, const Renderer& video, Bank bank,
 
 void draw_map(SDL_Renderer* renderer, const Renderer& video, Bank bank,
               const content::Tilemap& map, const Placement& placement,
-              int origin_column = 0, int origin_row = 0) {
+              int origin_column, int origin_row) {
     for (int row = 0; row < map.height; ++row) {
         for (int column = 0; column < map.width; ++column) {
             const auto index = static_cast<std::size_t>(row * map.width + column);
@@ -182,7 +180,7 @@ int wrapped_add(std::uint8_t raw, int first, int second) {
 void draw_sprite(SDL_Renderer* renderer, const Renderer& video,
                  const content::Catalog& content, Bank bank, std::uint8_t id,
                  const Placement& placement, std::uint8_t raw_x, std::uint8_t raw_y,
-                 bool flip = false, bool bounds = false) {
+                 bool flip, bool bounds) {
     if (id >= content.sprites.sprites.size())
         return;
     const content::Sprite& sprite = content.sprites.sprites[id];
@@ -216,19 +214,82 @@ void number(SDL_Renderer* renderer, const Renderer& video, Bank bank,
     }
 }
 
+void left_number(SDL_Renderer* renderer, const Renderer& video, Bank bank,
+                 const Placement& placement, std::uint32_t value, int column, int row) {
+    std::array<std::uint8_t, 10> digits{};
+    int count = 0;
+    do {
+        digits[static_cast<std::size_t>(count++)] = static_cast<std::uint8_t>(value % 10U);
+        value /= 10U;
+    } while (value != 0 && count < static_cast<int>(digits.size()));
+    for (int index = count - 1; index >= 0; --index) {
+        draw_tile(renderer, video, bank, digits[static_cast<std::size_t>(index)], placement,
+                  static_cast<float>(column + count - 1 - index), static_cast<float>(row));
+    }
+}
+
+std::uint8_t character_tile(char character) {
+    if (character >= '0' && character <= '9')
+        return static_cast<std::uint8_t>(character - '0');
+    if (character >= 'a' && character <= 'z')
+        character = static_cast<char>(character - 'a' + 'A');
+    if (character >= 'A' && character <= 'Z')
+        return static_cast<std::uint8_t>(character - 'A' + 0x0A);
+    if (character == '.') return 0x24;
+    if (character == '-') return 0x25;
+    if (character == '*') return 0x26;
+    if (character == '~') return 0x27;
+    return 0x2F;
+}
+
+void text(SDL_Renderer* renderer, const Renderer& video, Bank bank,
+          const Placement& placement, const char* value, int column, int row) {
+    for (int index = 0; value[index] != '\0'; ++index) {
+        draw_tile(renderer, video, bank, character_tile(value[index]), placement,
+                  static_cast<float>(column + index), static_cast<float>(row));
+    }
+}
+
+std::uint8_t tile_for(Block block) {
+    switch (block) {
+    case Block::empty: return 0;
+    case Block::l: return 0x84;
+    case Block::j: return 0x81;
+    case Block::o: return 0x83;
+    case Block::s: return 0x82;
+    case Block::z: return 0x86;
+    case Block::t: return 0x85;
+    case Block::i_horizontal_first: return 0x8A;
+    case Block::i_horizontal_middle: return 0x8B;
+    case Block::i_horizontal_last: return 0x8F;
+    case Block::i_vertical_first: return 0x80;
+    case Block::i_vertical_middle: return 0x88;
+    case Block::i_vertical_last: return 0x89;
+    default:
+        return static_cast<std::uint8_t>(0x80U + static_cast<unsigned int>(block) -
+                                         static_cast<unsigned int>(Block::garbage_0));
+    }
+}
+
 void draw_session(SDL_Renderer* renderer, const Renderer& video,
                   const content::Catalog& content, Bank bank,
                   const SinglePlayer& game, const Placement& placement,
-                  bool active, bool reduced_flash, bool bounds) {
+                  bool active, const Settings& settings, bool bounds) {
     for (int row = 0; row < board_height; ++row) {
         const bool clearing = std::ranges::find(game.clearing_rows(), row) != game.clearing_rows().end();
         for (int column = 0; column < board_width; ++column) {
-            Block block = game.board().at({column, row});
-            if (game.state() == PlayState::flashing_lines && clearing &&
-                (!reduced_flash && game.animation_step() % 2 == 0))
-                block = 0;
-            if (block != 0)
-                draw_tile(renderer, video, bank, static_cast<std::uint8_t>(0x7F + block),
+            const Block block = game.presentation_board().at({column, row});
+            std::uint8_t tile = tile_for(block);
+            if (game.state() == PlayState::clearing && clearing) {
+                const int final_step = settings.line_clear_speed == LineClearSpeed::original ? 6
+                                     : settings.line_clear_speed == LineClearSpeed::fast ? 4 : 1;
+                if (game.animation_step() == final_step)
+                    tile = 0;
+                else if (!settings.reduced_flash && game.animation_step() % 2 == 0)
+                    tile = 0x8C;
+            }
+            if (tile != 0)
+                draw_tile(renderer, video, bank, tile,
                           placement, static_cast<float>(column + 2), static_cast<float>(row));
         }
     }
@@ -249,12 +310,44 @@ void draw_session(SDL_Renderer* renderer, const Renderer& video,
     if (game.rules().type == GameType::type_a) {
         number(renderer, video, bank, placement, game.score(), 18, 3, 6);
         number(renderer, video, bank, placement, static_cast<std::uint32_t>(game.level()), 17, 7, 2);
+        if (game.rules().heart_mode)
+            draw_tile(renderer, video, bank, 0x27, placement, 18, 7);
     } else {
         number(renderer, video, bank, placement, static_cast<std::uint32_t>(game.level()), 16, 2, 1);
         number(renderer, video, bank, placement,
                static_cast<std::uint32_t>(game.rules().type_b_height), 16, 5, 1);
     }
     number(renderer, video, bank, placement, static_cast<std::uint32_t>(game.lines()), 17, 10, 4);
+
+    if (settings.effects != Intensity::off && game.state() == PlayState::clearing &&
+        !game.clearing_rows().empty()) {
+        const int final_step = settings.line_clear_speed == LineClearSpeed::original ? 6
+                             : settings.line_clear_speed == LineClearSpeed::fast ? 4 : 1;
+        const float progress = std::clamp(static_cast<float>(game.animation_step()) /
+                                          static_cast<float>(std::max(final_step, 1)), 0.0F, 1.0F);
+        const float width = 10.0F * placement.tile * progress;
+        SDL_SetRenderDrawColor(renderer, 224, 239, 207,
+                               settings.effects == Intensity::full ? 235 : 170);
+        for (const int row : game.clearing_rows()) {
+            const SDL_FRect beam{placement.x + 7.0F * placement.tile - width * 0.5F,
+                                 placement.y + (static_cast<float>(row) + 0.4F) * placement.tile,
+                                 width, std::max(1.0F, placement.tile * 0.2F)};
+            (void)SDL_RenderFillRect(renderer, &beam);
+            const int embers = settings.effects == Intensity::full ? 18 : 8;
+            for (int ember = 0; ember < embers; ++ember) {
+                const std::uint32_t seed = static_cast<std::uint32_t>(row * 131 + ember * 47 +
+                    game.animation_step() * 73);
+                const float pixel = std::max(1.0F, placement.tile / 8.0F);
+                const float side = (seed & 1U) != 0 ? 1.0F : -1.0F;
+                const SDL_FRect spark{placement.x + 7.0F * placement.tile + side * width * 0.5F +
+                                          side * static_cast<float>((seed >> 4U) % 7U) * pixel,
+                                      placement.y + (static_cast<float>(row) + 0.5F) * placement.tile +
+                                          static_cast<float>(static_cast<int>((seed >> 12U) % 9U) - 4) * pixel,
+                                      pixel, pixel};
+                (void)SDL_RenderFillRect(renderer, &spark);
+            }
+        }
+    }
 }
 
 void draw_grid(SDL_Renderer* renderer, const Placement& placement) {
@@ -286,7 +379,9 @@ void draw_background(SDL_Renderer* renderer, const GubsyFrame& frame,
     }
 }
 
-} // namespace
+} // namespace drawing
+
+using namespace drawing;
 
 bool Renderer::initialize(SDL_Renderer* renderer, const content::Catalog& content) {
     shutdown();
@@ -311,8 +406,21 @@ void Renderer::draw(SDL_Renderer* renderer, const GubsyFrame& frame,
     (void)SDL_SetRenderTarget(renderer, frame.render_target);
     draw_background(renderer, frame, settings, background_pulse(effects, settings));
     const Placement placement = centered(frame, shake_offset(effects, settings));
+    if (flow.screen() == Screen::buran || flow.screen() == Screen::rocket) {
+        draw_launch(renderer, *this, content, flow, placement);
+        if (debug.grid)
+            draw_grid(renderer, placement);
+        return;
+    }
+    if (flow.screen() == Screen::versus_round_result ||
+        flow.screen() == Screen::versus_match_result) {
+        draw_versus_result(renderer, *this, content, flow, placement);
+        if (debug.grid)
+            draw_grid(renderer, placement);
+        return;
+    }
     Bank bank = Bank::gameplay;
-    const char* map_id = map_for(flow.screen(), flow.game(), bank);
+    const char* map_id = map_for(flow, bank);
     if (map_id != nullptr) {
         if (const content::Tilemap* map = content.find_tilemap(map_id))
             draw_map(renderer, *this, bank, *map, placement);
@@ -329,31 +437,27 @@ void Renderer::draw(SDL_Renderer* renderer, const GubsyFrame& frame,
             draw_map(renderer, *this, Bank::multiplayer, *map, second);
         }
         draw_session(renderer, *this, content, Bank::multiplayer, flow.versus().player(0),
-                     first, true, settings.reduced_flash, debug.sprite_bounds);
+                     first, true, settings, debug.sprite_bounds);
         draw_session(renderer, *this, content, Bank::multiplayer, flow.versus().player(1),
-                     second, true, settings.reduced_flash, debug.sprite_bounds);
+                     second, true, settings, debug.sprite_bounds);
+        draw_versus_status(renderer, *this, content, flow.versus(), first, second);
         if (debug.grid) { draw_grid(renderer, first); draw_grid(renderer, second); }
         return;
     }
 
-    if (flow.screen() == Screen::gameplay || flow.screen() == Screen::demo ||
-        flow.screen() == Screen::game_over) {
+    if (flow.screen() == Screen::gameplay || flow.screen() == Screen::demo) {
         draw_session(renderer, *this, content, bank, flow.game(), placement,
-                     flow.screen() != Screen::game_over, settings.reduced_flash,
-                     debug.sprite_bounds);
+                     true, settings, debug.sprite_bounds);
     }
+    if (flow.screen() == Screen::game_over)
+        draw_game_over(renderer, *this, content, flow, bank, placement,
+                       settings, debug.sprite_bounds);
     if ((flow.screen() == Screen::gameplay || flow.screen() == Screen::demo) && flow.game().paused()) {
         if (const content::Tilemap* pause = content.find_tilemap("pause-message"))
             draw_map(renderer, *this, bank, *pause, placement, 3, 3);
     }
-    if (flow.screen() == Screen::type_b_celebration || flow.screen() == Screen::scoreboard) {
-        if (const content::Tilemap* board = content.find_tilemap("type-b-scoreboard"))
-            draw_map(renderer, *this, bank, *board, placement, 2, 0);
-    }
-    if (flow.screen() == Screen::dancers) {
-        if (const content::Tilemap* dancers = content.find_tilemap("dancers"))
-            draw_map(renderer, *this, bank, *dancers, placement, 2, 0);
-    }
+    draw_type_b_result(renderer, *this, content, flow, placement);
+    draw_flow_ui(renderer, *this, content, flow, placement);
     if (debug.grid)
         draw_grid(renderer, placement);
 }

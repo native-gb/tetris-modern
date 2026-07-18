@@ -20,8 +20,8 @@ const char* screen_name(Screen screen) {
 
 const char* state_name(PlayState state) {
     constexpr std::array names = {
-        "Falling", "Checking lines", "Flashing lines", "Waiting to collapse",
-        "Wiping board", "Game over", "Complete",
+        "Falling", "Locked", "Resolving", "Clearing", "Collapse pending",
+        "Wiping", "Game over", "Complete",
     };
     return names[static_cast<std::size_t>(state)];
 }
@@ -29,7 +29,7 @@ const char* state_name(PlayState state) {
 void draw_board(const Board& board) {
     for (int row = 0; row < board_height; ++row) {
         for (int column = 0; column < board_width; ++column) {
-            ImGui::TextUnformatted(board.at({column, row}) == 0 ? "." : "#");
+            ImGui::TextUnformatted(board.at({column, row}) == Block::empty ? "." : "#");
             if (column + 1 != board_width)
                 ImGui::SameLine(0, 0);
         }
@@ -128,6 +128,8 @@ bool draw_debug_ui(DebugUi& ui, GameFlow& flow,
             ImGui::MenuItem("Replay", nullptr, &ui.replay_window);
             ImGui::MenuItem("Enhancements", nullptr, &ui.settings_window);
             ImGui::MenuItem("Audio", nullptr, &ui.audio_window);
+            if (ImGui::MenuItem("Controller / keyboard bindings", "F2"))
+                ui.open_controls = true;
             ImGui::EndMenu();
         }
         if (ImGui::BeginMenu("Debug view")) {

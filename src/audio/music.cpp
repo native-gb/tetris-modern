@@ -70,6 +70,8 @@ bool MusicPlayer::select_section(MusicChannel& channel) {
 }
 
 void MusicPlayer::advance(std::size_t channel_index) {
+    if (channel_index >= channels_.size())
+        return;
     MusicChannel& channel = channels_[channel_index];
     if (!channel.active)
         return;

@@ -12,6 +12,7 @@
 
 namespace {
 
+#ifdef TETRIS_TEST_ROM
 int failures = 0;
 
 void expect(bool condition, const char* message) {
@@ -77,7 +78,6 @@ void block_below_spawn(tetris::SinglePlayer& game) {
     game.edit_board().set({lowest->x, lowest->y + 1}, tetris::Block::j);
 }
 
-#ifdef TETRIS_TEST_ROM
 void test_output() {
     using namespace tetris;
     using namespace tetris::audio;
@@ -232,9 +232,9 @@ void test_output() {
 int main() {
 #ifdef TETRIS_TEST_ROM
     test_output();
-#endif
     if (failures != 0)
         return 1;
+#endif
     std::puts("modern Native Tetris audio output tests passed");
     return 0;
 }

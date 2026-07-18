@@ -10,6 +10,7 @@
 
 namespace {
 
+#ifdef TETRIS_TEST_ROM
 int failures = 0;
 
 void expect(bool condition, const char* message) {
@@ -19,7 +20,6 @@ void expect(bool condition, const char* message) {
     ++failures;
 }
 
-#ifdef TETRIS_TEST_ROM
 void hash_byte(std::uint64_t& hash, std::uint8_t value) {
     hash ^= value;
     hash *= 1'099'511'628'211ULL;
@@ -177,9 +177,9 @@ void test_driver() {
 int main() {
 #ifdef TETRIS_TEST_ROM
     test_driver();
-#endif
     if (failures != 0)
         return 1;
+#endif
     std::puts("modern Native Tetris audio tests passed");
     return 0;
 }

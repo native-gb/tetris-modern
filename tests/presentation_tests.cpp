@@ -13,6 +13,7 @@
 
 namespace {
 
+#ifdef TETRIS_TEST_ROM
 int failures = 0;
 
 void expect(bool condition, const char* message) {
@@ -325,6 +326,7 @@ void test_versus_fit(SDL_Renderer* renderer, SDL_Window* window,
            "both losslessly scaled versus screens fit inside the host target");
     SDL_DestroyTexture(target.texture);
 }
+#endif
 
 } // namespace
 

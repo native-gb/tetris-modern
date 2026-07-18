@@ -81,7 +81,7 @@ bool register_controls(GubsyRuntime& runtime) {
 
     BindsProfile one;
     one.id = player_one_profile;
-    one.name = "TetrisPlayerOne";
+    one.name = "TetrisModernPlayerOne";
     bind(one, GubsyButton::KB_LEFT, Action::left); bind(one, GubsyButton::KB_A, Action::left);
     bind(one, GubsyButton::KB_RIGHT, Action::right); bind(one, GubsyButton::KB_D, Action::right);
     bind(one, GubsyButton::KB_UP, Action::up); bind(one, GubsyButton::KB_W, Action::up);
@@ -92,7 +92,7 @@ bool register_controls(GubsyRuntime& runtime) {
 
     BindsProfile two;
     two.id = player_two_profile;
-    two.name = "TetrisPlayerTwo";
+    two.name = "TetrisModernPlayerTwo";
     bind(two, GubsyButton::KB_J, Action::left); bind(two, GubsyButton::KB_L, Action::right);
     bind(two, GubsyButton::KB_I, Action::up); bind(two, GubsyButton::KB_K, Action::down);
     bind(two, GubsyButton::KB_U, Action::rotate_left); bind(two, GubsyButton::KB_O, Action::rotate_right);

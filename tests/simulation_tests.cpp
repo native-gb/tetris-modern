@@ -33,7 +33,7 @@ void force_tetris(tetris::SinglePlayer& game) {
         for (int column = 0; column < board_width; ++column)
             game.edit_board().set({column, row}, Block::j);
     }
-    game.place_piece_for_test({.kind = PieceKind::I, .origin = {6, 15}});
+    game.debug_place_piece({.kind = PieceKind::I, .origin = {6, 15}});
     tick(game, {.down = true});
     tick(game);
     int guard = 0;
@@ -74,7 +74,7 @@ void test_movement_rotation_and_das() {
     expect(game.piece().origin.x == original_x + 2, "DAS repeats after its initial delay");
 
     tick(game);
-    game.place_piece_for_test({.kind = PieceKind::I, .origin = {0, 8}});
+    game.debug_place_piece({.kind = PieceKind::I, .origin = {0, 8}});
     for (int row = 0; row < board_height; ++row)
         game.edit_board().set({1, row}, Block::o);
     tick(game, {.rotate_left = true});
@@ -82,7 +82,7 @@ void test_movement_rotation_and_das() {
            "colliding rotation rolls back without wall kicks");
 
     game.edit_board().clear();
-    game.place_piece_for_test({.kind = PieceKind::I, .origin = {4, -1}});
+    game.debug_place_piece({.kind = PieceKind::I, .origin = {4, -1}});
     tick(game);
     tick(game, {.rotate_right = true});
     expect(game.piece().rotation == Rotation::left,
@@ -96,7 +96,7 @@ void test_clear_pipeline_and_score() {
     game.edit_board().set({0, 0}, Block::t);
     for (int column = 0; column < 6; ++column)
         game.edit_board().set({column, 17}, Block::j);
-    game.place_piece_for_test({.kind = PieceKind::I, .origin = {6, 15}});
+    game.debug_place_piece({.kind = PieceKind::I, .origin = {6, 15}});
     tick(game, {.down = true});
     expect(game.state() == PlayState::locked, "blocked soft drop locks the piece");
     tick(game);
@@ -191,10 +191,10 @@ void test_level_saturation_pause_and_pacing() {
 
     SinglePlayer saturated;
     saturated.start({}, startup());
-    saturated.set_score_for_test(999'990);
+    saturated.debug_set_score(999'990);
     for (int column = 0; column < 6; ++column)
         saturated.edit_board().set({column, 17}, Block::j);
-    saturated.place_piece_for_test({.kind = PieceKind::I, .origin = {6, 15}});
+    saturated.debug_place_piece({.kind = PieceKind::I, .origin = {6, 15}});
     tick(saturated, {.down = true});
     int guard = 0;
     while (saturated.state() != PlayState::falling && guard < 200) {
@@ -219,7 +219,7 @@ void test_level_saturation_pause_and_pacing() {
         game.set_line_clear_speed(speed);
         for (int column = 0; column < 6; ++column)
             game.edit_board().set({column, 17}, Block::j);
-        game.place_piece_for_test({.kind = PieceKind::I, .origin = {6, 15}});
+        game.debug_place_piece({.kind = PieceKind::I, .origin = {6, 15}});
         tick(game, {.down = true});
         tick(game);
         int count = 0;

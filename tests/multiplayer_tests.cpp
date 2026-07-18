@@ -36,7 +36,7 @@ void force_clear(tetris::VersusMatch& match, int player, int rows) {
                 game.edit_board().set({column, row}, Block::j);
         }
     }
-    game.place_piece_for_test({.kind = PieceKind::I, .rotation = Rotation::right,
+    game.debug_place_piece({.kind = PieceKind::I, .rotation = Rotation::right,
                                .origin = {5, board_height - 4}});
     if (player == 0)
         tick(match, {.down = true});
@@ -100,7 +100,7 @@ void test_attacks_and_pause() {
            "queued attack waits for the recipient's next piece");
 
     SinglePlayer& recipient = match.edit_player(1);
-    recipient.place_piece_for_test({.kind = PieceKind::O, .origin = {3, 15}});
+    recipient.debug_place_piece({.kind = PieceKind::O, .origin = {3, 15}});
     tick(match, {}, {.down = true});
     tick(match);
     advance_to_piece(match, 1);
@@ -130,14 +130,14 @@ void test_results_and_draws() {
     const VersusRandom random = round_random();
     VersusMatch match;
     match.start({}, random);
-    match.edit_player(0).set_state_for_test(PlayState::complete);
+    match.edit_player(0).debug_set_state(PlayState::complete);
     tick(match);
     expect(match.state() == MatchState::round_over &&
                match.winner() == RoundWinner::player_one && match.wins(0) == 1,
            "completion awards player one a round");
     for (int win = 1; win < wins_for_match; ++win) {
         match.next_round({}, random);
-        match.edit_player(1).set_state_for_test(PlayState::game_over);
+        match.edit_player(1).debug_set_state(PlayState::game_over);
         tick(match);
     }
     expect(match.state() == MatchState::match_over && match.wins(0) == winner_display_wins,
@@ -145,8 +145,8 @@ void test_results_and_draws() {
 
     VersusMatch draw;
     draw.start({}, random);
-    draw.edit_player(0).set_state_for_test(PlayState::complete);
-    draw.edit_player(1).set_state_for_test(PlayState::complete);
+    draw.edit_player(0).debug_set_state(PlayState::complete);
+    draw.edit_player(1).debug_set_state(PlayState::complete);
     tick(draw);
     expect(draw.winner() == RoundWinner::draw && draw.wins(0) == 0 && draw.wins(1) == 0,
            "simultaneous terminal states are a no-score draw");

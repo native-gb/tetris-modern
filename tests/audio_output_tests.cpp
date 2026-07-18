@@ -142,7 +142,7 @@ void test_output() {
                 flow.edit_game().edit_board().set({x, y}, Block::j);
         }
     }
-    flow.edit_game().place_piece_for_test({.kind = PieceKind::I,
+    flow.edit_game().debug_place_piece({.kind = PieceKind::I,
                                            .rotation = Rotation::right,
                                            .origin = {5, board_height - 4}});
     tick(flow, output, {.down = true});

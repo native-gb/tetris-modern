@@ -139,18 +139,18 @@ void apply_debug_command(State& state) {
                     game.edit_board().set({column, row}, Block::j);
             }
         }
-        game.place_piece_for_test({.kind = PieceKind::I, .rotation = Rotation::right,
+        game.debug_place_piece({.kind = PieceKind::I, .rotation = Rotation::right,
                                    .origin = {5, 14}});
     } else if (command.type == DebugCommandType::toggle_cell) {
         const Cell cell{command.first, command.second};
         const Block next = game.board().at(cell) == Block::empty ? Block::t : Block::empty;
         game.edit_board().set(cell, next);
     } else if (command.type == DebugCommandType::set_score) {
-        game.set_score_for_test(command.value);
+        game.debug_set_score(command.value);
     } else if (command.type == DebugCommandType::force_game_over) {
-        game.set_state_for_test(PlayState::game_over);
+        game.debug_set_state(PlayState::game_over);
     } else if (command.type == DebugCommandType::force_complete) {
-        game.set_state_for_test(PlayState::complete);
+        game.debug_set_state(PlayState::complete);
     }
 }
 
@@ -184,7 +184,10 @@ bool place_window(SDL_Window* window) {
     (void)SDL_SetWindowFullscreen(window, false);
     (void)SDL_SetWindowSize(window, 640, 576);
     (void)SDL_SetWindowPosition(window, SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED);
-    return SDL_SyncWindow(window);
+    // Some tiling window managers do not acknowledge programmatic placement.
+    // The utility-window hint still makes the window float; placement is best effort.
+    (void)SDL_SyncWindow(window);
+    return true;
 }
 
 void apply_display_request(SDL_Window* window, DisplayRequest request) {
@@ -242,9 +245,24 @@ int run(const content::Rom& rom, const content::Catalog& content, int frame_limi
         return 1;
     }
     GubsyFrame frame = gubsy_get_frame(runtime);
-    if (!place_window(frame.window) || !register_controls(runtime) ||
-        !init_imgui_layer(frame.window, frame.renderer)) {
-        std::fprintf(stderr, "could not initialize window, controls, or ImGui\n");
+    if (!place_window(frame.window)) {
+        std::fprintf(stderr, "could not initialize the game window\n");
+        cleanup_gubsy_runtime(runtime);
+        return 1;
+    }
+    if (!register_controls(runtime)) {
+        std::fprintf(stderr, "could not initialize game controls\n");
+        cleanup_gubsy_runtime(runtime);
+        return 1;
+    }
+    frame = gubsy_get_frame(runtime);
+    if (frame.renderer == nullptr || frame.render_target == nullptr) {
+        std::fprintf(stderr, "Gubsy did not provide a complete render frame\n");
+        cleanup_gubsy_runtime(runtime);
+        return 1;
+    }
+    if (!init_imgui_layer(frame.window, frame.renderer)) {
+        std::fprintf(stderr, "could not initialize the ImGui developer interface\n");
         cleanup_gubsy_runtime(runtime);
         return 1;
     }

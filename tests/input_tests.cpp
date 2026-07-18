@@ -166,6 +166,15 @@ int main() {
         config.data_root = data_root.string();
         require(init_gubsy_runtime(runtime, config), "could not initialize Gubsy");
         initialized = true;
+        BindsProfile reference_one;
+        reference_one.id = 4101;
+        reference_one.name = "TetrisPlayerOne";
+        BindsProfile reference_two;
+        reference_two.id = 4102;
+        reference_two.name = "TetrisPlayerTwo";
+        require(gubsy_replace_binds_profile(runtime, reference_one) &&
+                    gubsy_replace_binds_profile(runtime, reference_two),
+                "could not create reference-port profile fixtures");
         require(register_controls(runtime), "could not register Tetris controls");
         clear_gamepad_assignments(runtime);
 

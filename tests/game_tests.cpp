@@ -131,7 +131,7 @@ void test_single_player_clear() {
         if (column < 3 || column > 6)
             game.edit_board().set({column, 17}, Block::j);
     }
-    game.place_piece_for_test({.kind = PieceKind::I, .origin = {3, 15}});
+    game.debug_place_piece({.kind = PieceKind::I, .origin = {3, 15}});
     game.tick({.buttons = {.down = true}, .random = {}});
     game.tick({});
     expect(game.state() == PlayState::resolving, "a complete row enters resolution delay");

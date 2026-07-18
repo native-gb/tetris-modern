@@ -120,10 +120,10 @@ public:
     std::size_t fixed_pieces_consumed() const;
     int locks_at_spawn() const;
 
-    void place_piece_for_test(FallingPiece piece);
-    void set_state_for_test(PlayState state);
-    void set_score_for_test(std::uint32_t score);
-    void set_results_for_test(LineCounts counts, std::uint32_t soft_drop_points);
+    void debug_place_piece(FallingPiece piece);
+    void debug_set_state(PlayState state);
+    void debug_set_score(std::uint32_t score);
+    void debug_set_results(LineCounts counts, std::uint32_t soft_drop_points);
 
 private:
     void rotate(const Buttons& pressed);

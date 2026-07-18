@@ -223,7 +223,7 @@ void test_flow_compositions(SDL_Renderer* renderer, SDL_Window* window,
     game.start_session({.type = GameType::type_a}, startup());
     draw(renderer, window, target, video, content, game, settings);
     const std::uint64_t empty_score = checksum(renderer);
-    game.edit_game().set_score_for_test(123'456);
+    game.edit_game().debug_set_score(123'456);
     draw(renderer, window, target, video, content, game, settings);
     expect(checksum(renderer) != empty_score, "Type-A HUD renders live score digits");
     const std::uint64_t active = checksum(renderer);
@@ -236,8 +236,8 @@ void test_flow_compositions(SDL_Renderer* renderer, SDL_Window* window,
     expect(checksum(renderer) != active, "pause map visibly overlays gameplay");
 
     game.edit_game().set_paused(false);
-    game.edit_game().set_score_for_test(200'000);
-    game.edit_game().set_state_for_test(PlayState::game_over);
+    game.edit_game().debug_set_score(200'000);
+    game.edit_game().debug_set_state(PlayState::game_over);
     game.tick(input());
     draw(renderer, window, target, video, content, game, settings);
     const std::uint64_t curtain_start = checksum(renderer);
@@ -254,7 +254,7 @@ void test_flow_compositions(SDL_Renderer* renderer, SDL_Window* window,
 }
 
 void finish_versus_round(tetris::GameFlow& flow, int winner) {
-    flow.edit_versus().edit_player(winner).set_state_for_test(tetris::PlayState::complete);
+    flow.edit_versus().edit_player(winner).debug_set_state(tetris::PlayState::complete);
     flow.tick(input());
     tick(flow, 40);
 }

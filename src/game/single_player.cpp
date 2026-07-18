@@ -447,10 +447,10 @@ RandomSamples SinglePlayer::last_random_samples() const { return last_random_sam
 int SinglePlayer::last_random_attempts() const { return last_random_attempts_; }
 std::size_t SinglePlayer::fixed_pieces_consumed() const { return next_fixed_piece_; }
 int SinglePlayer::locks_at_spawn() const { return locks_at_spawn_; }
-void SinglePlayer::place_piece_for_test(FallingPiece piece) { piece_ = piece; state_ = PlayState::falling; }
-void SinglePlayer::set_state_for_test(PlayState state) { state_ = state; }
-void SinglePlayer::set_score_for_test(std::uint32_t score) { score_ = std::min(score, maximum_score); }
-void SinglePlayer::set_results_for_test(LineCounts counts, std::uint32_t soft_drop_points) {
+void SinglePlayer::debug_place_piece(FallingPiece piece) { piece_ = piece; state_ = PlayState::falling; }
+void SinglePlayer::debug_set_state(PlayState state) { state_ = state; }
+void SinglePlayer::debug_set_score(std::uint32_t score) { score_ = std::min(score, maximum_score); }
+void SinglePlayer::debug_set_results(LineCounts counts, std::uint32_t soft_drop_points) {
     line_counts_ = counts;
     soft_drop_points_ = soft_drop_points;
 }

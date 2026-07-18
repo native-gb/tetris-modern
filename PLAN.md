@@ -135,7 +135,8 @@ named catalogs for:
 - tilemaps, menus and screen layouts;
 - metasprites and presentation actor frames;
 - piece shapes, orientations and spawn data;
-- gravity, score, level and Type-B data tables;
+- gravity, piece, and Type-B data tables, plus named semantic rules for score
+  and level behavior encoded in original instructions;
 - demo inputs and deterministic demo piece data;
 - high-score defaults and name-entry presentation data;
 - dancers, musicians, Mario, Luigi, rockets and Buran sequences;
@@ -217,9 +218,9 @@ tested compatibility preset. Pacing and rules identities are stored in replay
 and high-score metadata when they can affect outcomes.
 
 Implement effects from semantic events. Never infer a Tetris, lock or ending
-by scraping rendered pixels. Render the canonical original scene to an indexed
-intermediate surface, then compose it into the host scene. Keep sharp gameplay
-pixels authoritative while effects and backgrounds use separate layers.
+by scraping rendered pixels. Render the canonical original scene to a
+palette-limited 160x144 target, then compose it into the host scene. Keep sharp
+gameplay pixels authoritative while effects and backgrounds use separate layers.
 
 Deferred ideas in the old enhancement roadmap—SRS, hold, seven-bag, Sprint,
 Marathon, ghost pieces, arbitrary next queues and a general compositor toybox—

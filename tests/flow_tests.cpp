@@ -189,7 +189,7 @@ void test_versus_result_flow() {
     press(flow, {.right = true});
     press(flow, {.start = true});
     press(flow, {.rotate_right = true});
-    flow.edit_versus().edit_player(0).set_state_for_test(PlayState::complete);
+    flow.edit_versus().edit_player(0).debug_set_state(PlayState::complete);
     flow.tick(input());
     expect(flow.screen() == Screen::versus_gameplay && flow.versus().wins(0) == 1,
            "round completion begins the frozen result delay");
@@ -208,7 +208,7 @@ void test_versus_result_flow() {
 
     for (int win = 1; win < wins_for_match; ++win) {
         press(flow, {.rotate_right = true});
-        flow.edit_versus().edit_player(1).set_state_for_test(PlayState::game_over);
+        flow.edit_versus().edit_player(1).debug_set_state(PlayState::game_over);
         flow.tick(input());
         tick(flow, 40);
         if (win + 1 < wins_for_match)
@@ -235,8 +235,8 @@ void test_rocket_thresholds_and_game_over_wipes() {
         GameFlow flow;
         flow.start(resources());
         flow.start_session({.type = GameType::type_a}, startup());
-        flow.edit_game().set_score_for_test(score);
-        flow.edit_game().set_state_for_test(PlayState::game_over);
+        flow.edit_game().debug_set_score(score);
+        flow.edit_game().debug_set_state(PlayState::game_over);
         flow.tick(input());
         tick(flow, 70);
         return flow;
@@ -255,8 +255,8 @@ void test_rocket_thresholds_and_game_over_wipes() {
     GameFlow flow;
     flow.start(resources());
     flow.start_session({.type = GameType::type_a}, startup());
-    flow.edit_game().set_score_for_test(200'000);
-    flow.edit_game().set_state_for_test(PlayState::game_over);
+    flow.edit_game().debug_set_score(200'000);
+    flow.edit_game().debug_set_state(PlayState::game_over);
     flow.tick(input());
     expect(flow.ending_stage() == EndingStage::game_over_curtain &&
                flow.game_over_curtain_rows() == 0,
@@ -295,7 +295,7 @@ void test_type_b_endings_and_scoreboard() {
         flow.start(resources());
         flow.start_session({.type = GameType::type_b, .starting_level = 9,
                                   .type_b_height = height}, startup());
-        flow.edit_game().set_state_for_test(PlayState::complete);
+        flow.edit_game().debug_set_state(PlayState::complete);
         flow.tick(input());
         tick(flow, 100);
         expect(flow.screen() == Screen::dancers,
@@ -309,7 +309,7 @@ void test_type_b_endings_and_scoreboard() {
     buran.start(resources());
     buran.start_session({.type = GameType::type_b, .starting_level = 9,
                                .type_b_height = 5}, startup());
-    buran.edit_game().set_state_for_test(PlayState::complete);
+    buran.edit_game().debug_set_state(PlayState::complete);
     buran.tick(input());
     tick(buran, 100);
     expect(buran.screen() == Screen::dancers && buran.dancer_frame(0) == 0,
@@ -338,8 +338,8 @@ void test_type_b_endings_and_scoreboard() {
     GameFlow scoreboard;
     scoreboard.start(resources());
     scoreboard.start_session({.type = GameType::type_b, .starting_level = 2}, startup());
-    scoreboard.edit_game().set_results_for_test({1, 1, 1, 1}, 3);
-    scoreboard.edit_game().set_state_for_test(PlayState::complete);
+    scoreboard.edit_game().debug_set_results({1, 1, 1, 1}, 3);
+    scoreboard.edit_game().debug_set_state(PlayState::complete);
     scoreboard.tick(input());
     tick(scoreboard, 100 + 128);
     int guard = 0;
@@ -360,8 +360,8 @@ void test_high_score_name_entry_and_keys() {
     GameFlow flow;
     flow.start(resources());
     flow.start_session({.type = GameType::type_a, .heart_mode = true}, startup());
-    flow.edit_game().set_score_for_test(12'345);
-    flow.edit_game().set_state_for_test(PlayState::game_over);
+    flow.edit_game().debug_set_score(12'345);
+    flow.edit_game().debug_set_state(PlayState::game_over);
     flow.tick(input());
     tick(flow, 70);
     press(flow, {.rotate_right = true});

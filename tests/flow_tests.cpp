@@ -234,7 +234,7 @@ void test_rocket_thresholds_and_game_over_wipes() {
     const auto ending = [](std::uint32_t score) {
         GameFlow flow;
         flow.start(resources());
-        flow.start_game_for_test({.type = GameType::type_a}, startup());
+        flow.start_session({.type = GameType::type_a}, startup());
         flow.edit_game().set_score_for_test(score);
         flow.edit_game().set_state_for_test(PlayState::game_over);
         flow.tick(input());
@@ -254,7 +254,7 @@ void test_rocket_thresholds_and_game_over_wipes() {
 
     GameFlow flow;
     flow.start(resources());
-    flow.start_game_for_test({.type = GameType::type_a}, startup());
+    flow.start_session({.type = GameType::type_a}, startup());
     flow.edit_game().set_score_for_test(200'000);
     flow.edit_game().set_state_for_test(PlayState::game_over);
     flow.tick(input());
@@ -293,7 +293,7 @@ void test_type_b_endings_and_scoreboard() {
     for (int height = 0; height < 5; ++height) {
         GameFlow flow;
         flow.start(resources());
-        flow.start_game_for_test({.type = GameType::type_b, .starting_level = 9,
+        flow.start_session({.type = GameType::type_b, .starting_level = 9,
                                   .type_b_height = height}, startup());
         flow.edit_game().set_state_for_test(PlayState::complete);
         flow.tick(input());
@@ -307,7 +307,7 @@ void test_type_b_endings_and_scoreboard() {
 
     GameFlow buran;
     buran.start(resources());
-    buran.start_game_for_test({.type = GameType::type_b, .starting_level = 9,
+    buran.start_session({.type = GameType::type_b, .starting_level = 9,
                                .type_b_height = 5}, startup());
     buran.edit_game().set_state_for_test(PlayState::complete);
     buran.tick(input());
@@ -337,7 +337,7 @@ void test_type_b_endings_and_scoreboard() {
 
     GameFlow scoreboard;
     scoreboard.start(resources());
-    scoreboard.start_game_for_test({.type = GameType::type_b, .starting_level = 2}, startup());
+    scoreboard.start_session({.type = GameType::type_b, .starting_level = 2}, startup());
     scoreboard.edit_game().set_results_for_test({1, 1, 1, 1}, 3);
     scoreboard.edit_game().set_state_for_test(PlayState::complete);
     scoreboard.tick(input());
@@ -359,7 +359,7 @@ void test_high_score_name_entry_and_keys() {
     using namespace tetris;
     GameFlow flow;
     flow.start(resources());
-    flow.start_game_for_test({.type = GameType::type_a, .heart_mode = true}, startup());
+    flow.start_session({.type = GameType::type_a, .heart_mode = true}, startup());
     flow.edit_game().set_score_for_test(12'345);
     flow.edit_game().set_state_for_test(PlayState::game_over);
     flow.tick(input());

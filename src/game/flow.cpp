@@ -498,7 +498,7 @@ bool GameFlow::versus_result_prompt_visible() const {
 }
 LineClearSpeed GameFlow::line_clear_speed() const { return line_clear_speed_; }
 
-void GameFlow::start_game_for_test(GameRules rules, const StartupRandom& random) {
+void GameFlow::start_session(GameRules rules, const StartupRandom& random) {
     selected_type_ = rules.type;
     type_a_level_ = rules.starting_level;
     type_b_level_ = rules.starting_level;

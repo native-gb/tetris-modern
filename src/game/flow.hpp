@@ -133,7 +133,7 @@ public:
     bool versus_result_prompt_visible() const;
     LineClearSpeed line_clear_speed() const;
 
-    void start_game_for_test(GameRules rules, const StartupRandom& random);
+    void start_session(GameRules rules, const StartupRandom& random);
 
 private:
     void tick_copyright(const Buttons& pressed);

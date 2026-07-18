@@ -219,7 +219,7 @@ void test_flow_compositions(SDL_Renderer* renderer, SDL_Window* window,
     GameFlow game;
     game.start({content.type_a_demo.runs, content.type_b_demo.runs,
                 content.demo_pieces, content.type_b_demo_garbage.bytes});
-    game.start_game_for_test({.type = GameType::type_a}, startup());
+    game.start_session({.type = GameType::type_a}, startup());
     draw(renderer, window, target, video, content, game, settings);
     const std::uint64_t empty_score = checksum(renderer);
     game.edit_game().set_score_for_test(123'456);

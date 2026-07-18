@@ -117,7 +117,7 @@ void apply_debug_command(State& state) {
         const GameType type = command.type == DebugCommandType::start_type_a
                                   ? GameType::type_a
                                   : GameType::type_b;
-        state.flow.start_game_for_test(
+        state.flow.start_session(
             {.type = type, .starting_level = command.first,
              .type_b_height = type == GameType::type_b ? command.second : 0},
             startup_random(state));

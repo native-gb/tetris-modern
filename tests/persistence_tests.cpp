@@ -1,6 +1,8 @@
 #include "app/persistence.hpp"
+#include "presentation/effects.hpp"
 #include "presentation/settings.hpp"
 
+#include <array>
 #include <cstdio>
 #include <filesystem>
 #include <fstream>
@@ -67,11 +69,55 @@ void test_settings_schema_and_migration() {
     std::filesystem::remove(path);
 }
 
+void test_presets_and_semantic_effects() {
+    using namespace tetris;
+    using namespace tetris::presentation;
+    Settings settings = original_settings();
+    settings.reduced_flash = true;
+    settings.music_volume = 0.25F;
+    apply_preset(settings, Preset::enhanced);
+    expect(settings.preset == Preset::enhanced &&
+               settings.line_clear_speed == LineClearSpeed::fast &&
+               settings.layout == Layout::widescreen_frame &&
+               settings.background == Background::stars &&
+               settings.effects == Intensity::subtle,
+           "Enhanced preset selects every recommended enhancement");
+    expect(settings.reduced_flash && settings.music_volume == 0.25F,
+           "accessibility and volume overrides survive preset changes");
+
+    EffectState effects;
+    constexpr std::array<Event, 1> landed{{{GameEvent::landed, 0}}};
+    advance(effects, landed, settings);
+    expect(effects.shake_ticks > 0 &&
+               (shake_offset(effects, settings).x != 0.0F ||
+                shake_offset(effects, settings).y != 0.0F),
+           "landing event starts a visible semantic shake");
+
+    constexpr std::array<Event, 1> tetris{{{GameEvent::cleared_lines, 4}}};
+    advance(effects, tetris, settings);
+    expect(effects.shake_strength >= 2.0F && background_pulse(effects, settings) == 0.0F,
+           "Tetris strengthens shake while Reduced Flash suppresses its pulse");
+
+    settings.reduced_flash = false;
+    settings.reduced_motion = true;
+    effects = {};
+    advance(effects, tetris, settings);
+    expect(effects.shake_ticks == 0 && background_pulse(effects, settings) > 0.0F,
+           "Reduced Motion suppresses shake without suppressing an allowed pulse");
+
+    apply_preset(settings, Preset::original);
+    effects = {};
+    advance(effects, tetris, settings);
+    expect(effects.shake_ticks == 0 && background_pulse(effects, settings) == 0.0F,
+           "Original preset disables host effects");
+}
+
 } // namespace
 
 int main() {
     test_high_scores_round_trip();
     test_settings_schema_and_migration();
+    test_presets_and_semantic_effects();
     if (failures != 0)
         return 1;
     std::puts("modern Native Tetris persistence tests passed");

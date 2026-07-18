@@ -160,8 +160,10 @@ int main() {
         GubsyAppConfig config;
         config.enable_mods = false;
         config.project_root = std::filesystem::current_path().string();
-        config.data_root =
-            (std::filesystem::temp_directory_path() / "tetris-controller-test").string();
+        const std::filesystem::path data_root =
+            std::filesystem::temp_directory_path() / "tetris-controller-test";
+        std::filesystem::remove_all(data_root);
+        config.data_root = data_root.string();
         require(init_gubsy_runtime(runtime, config), "could not initialize Gubsy");
         initialized = true;
         require(register_controls(runtime), "could not register Tetris controls");
@@ -185,6 +187,11 @@ int main() {
         verify_button(runtime, one, 0, SDL_GAMEPAD_BUTTON_SOUTH, Action::rotate_right);
         verify_button(runtime, one, 0, SDL_GAMEPAD_BUTTON_START, Action::start);
         verify_button(runtime, one, 0, SDL_GAMEPAD_BUTTON_BACK, Action::select);
+        one.set(SDL_GAMEPAD_BUTTON_RIGHT_STICK, true);
+        pump_events(runtime);
+        require(action_down(runtime, 0, Action::quit), "controller stick click did not map to Quit");
+        one.set(SDL_GAMEPAD_BUTTON_RIGHT_STICK, false);
+        pump_events(runtime);
 
         two.set(SDL_GAMEPAD_BUTTON_SOUTH, true);
         pump_events(runtime);

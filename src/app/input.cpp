@@ -9,8 +9,8 @@
 namespace tetris::app {
 namespace {
 
-constexpr int player_one_profile = 4101;
-constexpr int player_two_profile = 4102;
+constexpr int player_one_profile = 4201;
+constexpr int player_two_profile = 4202;
 
 void bind(BindsProfile& profile, GubsyButton button, Action action) {
     bind_button(profile, button, static_cast<int>(action));
@@ -25,6 +25,8 @@ void bind_gamepad(BindsProfile& profile) {
     bind(profile, GubsyButton::GP_A, Action::rotate_right);
     bind(profile, GubsyButton::GP_START, Action::start);
     bind(profile, GubsyButton::GP_BACK, Action::select);
+    bind(profile, GubsyButton::GP_GUIDE, Action::quit);
+    bind(profile, GubsyButton::GP_RIGHT_STICK_BUTTON, Action::quit);
 }
 
 bool has_gamepad(const GubsyLobbyPlayer& player) {

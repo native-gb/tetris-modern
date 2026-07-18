@@ -97,7 +97,7 @@ void test_output() {
 
     GameFlow flow;
     flow.start(resources(content));
-    flow.start_game_for_test({.type = GameType::type_a}, startup());
+    flow.start_session({.type = GameType::type_a}, startup());
     output.tick(flow, 7, false);
     expect(output.director().active_song() == 4,
            "Type A selects the original Korobeiniki program");
@@ -133,7 +133,7 @@ void test_output() {
 
     output.reset();
     flow.start(resources(content));
-    flow.start_game_for_test({.type = GameType::type_a}, startup());
+    flow.start_session({.type = GameType::type_a}, startup());
     flow.set_line_clear_speed(LineClearSpeed::instant);
     output.tick(flow, 7, false);
     for (int y = board_height - 4; y < board_height; ++y) {
@@ -158,7 +158,7 @@ void test_output() {
 
     output.reset();
     flow.start(resources(content));
-    flow.start_game_for_test({.type = GameType::type_a}, startup());
+    flow.start_session({.type = GameType::type_a}, startup());
     output.tick(flow, 7, false);
     block_below_spawn(flow.edit_game());
     tick(flow, output, {.down = true});

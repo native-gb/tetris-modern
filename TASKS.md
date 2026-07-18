@@ -99,6 +99,14 @@ proportionate evidence; it is not a progress estimate.
 - [x] Pass the complete ASan/UBSan suite.
 - [x] Pass ROM and clean-checkout audits.
 - [ ] Complete manual keyboard/controller playthroughs and layout/audio passes.
+      Required hands-on acceptance:
+      - navigate startup, Type A, Type B, pause, preview, retry and quit once
+        with keyboard and once with a physical controller;
+      - hot-plug the controller and confirm player-one/player-two assignment;
+      - compare Original and Enhanced at windowed, resized and borderless sizes;
+      - audition all songs and effects for wrong notes, rhythm, envelopes,
+        channel balance, clipping, stuck tones or missing cues;
+      - inspect gameplay, game over, local versus, rocket and Buran layouts.
 - [x] Document every intentional difference and remaining optional idea.
 - [ ] Confirm no known missing behavior, content, enhancement or blocker remains.
 - [ ] Promote repository names only after every preceding item is satisfied.

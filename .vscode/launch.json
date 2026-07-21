@@ -1,0 +1,21 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Run/Debug Native Tetris Modern",
+      "type": "lldb",
+      "request": "launch",
+      "program": "${workspaceFolder}/build-debug/native-gb-tetris-modern",
+      "args": [
+        "--rom",
+        "${workspaceFolder}/roms/Tetris (JUE) (V1.1) [!].gb"
+      ],
+      "stopOnEntry": false,
+      "cwd": "${workspaceFolder}",
+      "terminal": "console",
+      "internalConsoleOptions": "neverOpen",
+      "preLaunchTask": "native-gb-tetris-modern: build dev",
+      "sourceLanguages": ["c++"]
+    }
+  ]
+}
